@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "ShaadiHub Vendor",
+    "slug": "shaadihub-vendor",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "assetBundlePatterns": [
+      "**/*"
+    ]
+  }
+}
+

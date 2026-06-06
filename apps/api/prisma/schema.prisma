@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VendorStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum EventType {
+  VIEW
+  CONTACT_REVEAL
+  WHATSAPP_CLICK
+  LEAD
+}
+
+model Vendor {
+  id               String          @id @default(cuid())
+  phone            String          @unique
+  isPhoneVerified  Boolean         @default(false)
+  businessName     String?
+  ownerName        String?
+  mobileNumber     String?
+  email            String?
+  address          String?
+  city             String?
+  area             String?
+  mapLocationUrl   String?
+  businessImages   String[]        @default([])
+  status           VendorStatus    @default(PENDING)
+  services         Service[]
+  offers           Offer[]
+  otpSessions      OtpSession[]
+  analyticsEvents  AnalyticsEvent[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model OtpSession {
+  id         String   @id @default(cuid())
+  phone      String
+  code       String
+  verified   Boolean  @default(false)
+  expiresAt  DateTime
+  vendorId   String?
+  vendor     Vendor?  @relation(fields: [vendorId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@index([phone, verified])
+}
+
+model Service {
+  id             String   @id @default(cuid())
+  vendorId       String
+  vendor         Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  category       String
+  serviceName    String
+  description    String
+  price          Float
+  capacity       Int?
+  galleryImages  String[] @default([])
+  videoUrls      String[] @default([])
+  highlights     String[] @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([vendorId, category])
+}
+
+model Offer {
+  id              String   @id @default(cuid())
+  vendorId        String
+  vendor          Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  title           String
+  description     String
+  discountPercent Int
+  startDate       DateTime
+  endDate         DateTime
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([vendorId, isActive])
+}
+
+model AnalyticsEvent {
+  id         String    @id @default(cuid())
+  vendorId   String
+  vendor     Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  type       EventType
+  source     String?
+  metadata   Json?
+  createdAt  DateTime  @default(now())
+
+  @@index([vendorId, type])
+}
+

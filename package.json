@@ -1,0 +1,16 @@
+{
+  "name": "shaadihub-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "postinstall": "npm run build -w packages/shared",
+    "dev:api": "npm run dev -w apps/api",
+    "test:api": "npm run test -w apps/api",
+    "lint:api": "npm run lint -w apps/api"
+  }
+}
+
