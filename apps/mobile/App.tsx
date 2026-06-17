@@ -1,140 +1,245 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
-  Alert,
-  Pressable,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
+  Image,
+  ActivityIndicator,
+  Pressable,
+  Platform,
+  StatusBar as RNStatusBar,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { apiRequest } from "./src/api/client";
-import { StatCard } from "./src/components/StatCard";
+import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
+import { authApi, vendorApi } from "./src/api";
+import { LoginScreen } from "./src/screens/LoginScreen";
+import { RegisterProfileScreen } from "./src/screens/RegisterProfileScreen";
+import { OtpVerifyScreen } from "./src/screens/OtpVerifyScreen";
+import { DashboardScreen } from "./src/screens/DashboardScreen";
+import { ServiceListScreen } from "./src/screens/ServiceListScreen";
+import { ServicesScreen } from "./src/screens/ServicesScreen";
+import { ProfileScreen } from "./src/screens/ProfileScreen";
+import { ReviewsScreen } from "./src/screens/ReviewsScreen";
 import { colors } from "./src/theme/colors";
 
 type Tab = "dashboard" | "services" | "offers" | "profile";
+type ViewState = "login" | "signup" | "otp_verify" | "main" | "service_form" | "reviews";
+
+const toastConfig = {
+  success: (props: any) => (
+    <BaseToast
+      {...props}
+      style={{ borderLeftColor: colors.success, backgroundColor: colors.white, borderRadius: 12 }}
+      contentContainerStyle={{ paddingHorizontal: 15 }}
+      text1Style={{ fontSize: 16, fontWeight: '700', color: colors.text }}
+      text2Style={{ fontSize: 13, color: colors.textMuted }}
+    />
+  ),
+  error: (props: any) => (
+    <ErrorToast
+      {...props}
+      style={{ borderLeftColor: colors.error, backgroundColor: colors.white, borderRadius: 12 }}
+      text1Style={{ fontSize: 16, fontWeight: '700', color: colors.text }}
+      text2Style={{ fontSize: 13, color: colors.textMuted }}
+    />
+  )
+};
 
 export default function App() {
+  const [view, setView] = useState<ViewState>("login");
   const [tab, setTab] = useState<Tab>("dashboard");
+
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [token, setToken] = useState("");
+  const [signupData, setSignupData] = useState<any>(null);
+
   const [dashboard, setDashboard] = useState<any>(null);
-
-  const [serviceName, setServiceName] = useState("");
-  const [serviceCategory, setServiceCategory] = useState("Banquet Hall");
-  const [servicePrice, setServicePrice] = useState("");
-
-  const [offerTitle, setOfferTitle] = useState("");
-  const [offerDiscount, setOfferDiscount] = useState("");
+  const [profile, setProfile] = useState<any>(null);
+  const [services, setServices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editingService, setEditingService] = useState<any>(null);
 
   const isLoggedIn = useMemo(() => token.length > 0, [token]);
 
-  async function requestOtp() {
-    const data = await apiRequest<{ debugCode: string }>("/auth/request-otp", {
-      method: "POST",
-      body: { phone },
-    });
+  useEffect(() => {
+    if (isLoggedIn) {
+      loadInitialData();
+    }
+  }, [isLoggedIn, token]);
 
-    Alert.alert("OTP Sent", `Demo OTP: ${data.debugCode}`);
-  }
+  async function loadInitialData() {
+    setLoading(true);
+    try {
+      const prof = await vendorApi.getProfile(token);
+      setProfile(prof);
 
-  async function verifyOtp() {
-    const data = await apiRequest<{ token: string }>("/auth/verify-otp", {
-      method: "POST",
-      body: { phone, code: otp },
-    });
+      if (signupData) {
+        await vendorApi.updateProfile(token, signupData);
+        const updatedProf = await vendorApi.getProfile(token);
+        setProfile(updatedProf);
+        setSignupData(null);
+      }
 
-    setToken(data.token);
-    Alert.alert("Success", "Vendor login successful");
+      if (!prof.businessName && !signupData) {
+        setView("signup");
+      } else {
+        setView("main");
+        await Promise.all([loadDashboard(), loadServices()]);
+      }
+    } catch (err) {
+      setToken("");
+      setView("login");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadDashboard() {
-    const data = await apiRequest("/vendor/dashboard", {
-      token,
-    });
-
-    setDashboard(data);
+    try {
+      const data = await vendorApi.getDashboard(token);
+      setDashboard(data);
+    } catch (err) {}
   }
 
-  async function saveService() {
-    await apiRequest("/vendor/services", {
-      method: "POST",
-      token,
-      body: {
-        category: serviceCategory,
-        serviceName,
-        description: `${serviceName} premium package`,
-        price: Number(servicePrice),
-        capacity: 300,
-        galleryImages: [],
-        videoUrls: [],
-        highlights: ["Wedding", "Reception"],
-      },
-    });
-
-    Alert.alert("Saved", "Service created");
+  async function loadServices() {
+    try {
+      const data = await vendorApi.getServices(token);
+      setServices(data);
+    } catch (err) {}
   }
 
-  async function saveOffer() {
-    const today = new Date();
-    const nextMonth = new Date(today);
-    nextMonth.setDate(today.getDate() + 30);
+  // --- Auth Actions ---
+  async function requestOtp(targetPhone: string, type: "login" | "signup" = "login") {
+    if (!targetPhone || targetPhone.length < 10) {
+      return Toast.show({ type: 'error', text1: 'Invalid Number', text2: 'Enter a valid 10-digit number' });
+    }
+    setLoading(true);
+    try {
+      const data = type === "login"
+        ? await authApi.loginRequestOtp(targetPhone)
+        : await authApi.requestOtp(targetPhone);
 
-    await apiRequest("/vendor/offers", {
-      method: "POST",
-      token,
-      body: {
-        title: offerTitle,
-        description: `${offerTitle} limited period discount`,
-        discountPercent: Number(offerDiscount),
-        startDate: today.toISOString(),
-        endDate: nextMonth.toISOString(),
-      },
-    });
+      setPhone(targetPhone);
+      setView("otp_verify");
+      Toast.show({ type: 'success', text1: 'OTP Sent', text2: `Use code ${data.debugCode} for testing` });
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err.message });
+    } finally {
+      setLoading(false);
+    }
+  }
 
-    Alert.alert("Saved", "Offer created");
+  async function verifyOtp() {
+    if (!otp || otp.length < 6) {
+      return Toast.show({ type: 'error', text1: 'Invalid OTP', text2: 'Please enter the 6-digit code' });
+    }
+    setLoading(true);
+    try {
+      const data = await authApi.verifyOtp(phone, otp);
+      setToken(data.token);
+      Toast.show({ type: 'success', text1: 'Verified', text2: 'Login successful!' });
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Verification Failed', text2: err.message });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // --- Service Actions ---
+  async function handleSaveService(data: any) {
+    setLoading(true);
+    try {
+      if (editingService) {
+        await vendorApi.updateService(token, editingService.id, data);
+        Toast.show({ type: 'success', text1: 'Updated', text2: 'Service updated successfully' });
+      } else {
+        await vendorApi.createService(token, data);
+        Toast.show({ type: 'success', text1: 'Created', text2: 'New service added successfully' });
+      }
+      await loadServices();
+      setView("main");
+    } catch (err) {
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to save service' });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDeleteService(id: string) {
+    try {
+      await vendorApi.deleteService(token, id);
+      Toast.show({ type: 'success', text1: 'Deleted', text2: 'Service removed' });
+      await loadServices();
+    } catch (err) {
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to delete service' });
+    }
   }
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.heading}>ShaadiHub Vendor Console</Text>
-        <Text style={styles.subheading}>Milestone 1 vendor module (responsive)</Text>
 
-        {!isLoggedIn && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Login with OTP</Text>
-            <TextInput
-              placeholder="Mobile Number"
-              keyboardType="phone-pad"
-              style={styles.input}
-              value={phone}
-              onChangeText={setPhone}
+      {view === "main" && (
+        <View style={styles.header}>
+          <Image source={require("./assets/logo.png")} style={styles.headerLogo} resizeMode="contain" />
+          <View>
+            <Text style={styles.subheading}>Events Made Easy</Text>
+          </View>
+        </View>
+      )}
+
+      <View style={styles.flex}>
+        {view === "login" && (
+          <View style={styles.centerContent}>
+            <LoginScreen
+              phone={phone} setPhone={setPhone}
+              onSendOtp={() => requestOtp(phone, "login")}
+              onGoToSignup={() => setView("signup")}
+              loading={loading}
             />
-            <TextInput
-              placeholder="Enter OTP"
-              keyboardType="number-pad"
-              style={styles.input}
-              value={otp}
-              onChangeText={setOtp}
-            />
-            <View style={styles.row}>
-              <Pressable style={styles.buttonSecondary} onPress={requestOtp}>
-                <Text style={styles.buttonSecondaryText}>Request OTP</Text>
-              </Pressable>
-              <Pressable style={styles.buttonPrimary} onPress={verifyOtp}>
-                <Text style={styles.buttonPrimaryText}>Verify</Text>
-              </Pressable>
-            </View>
           </View>
         )}
 
-        {isLoggedIn && (
-          <>
+        {view === "signup" && (
+          <RegisterProfileScreen
+            onComplete={(data) => {
+              setSignupData(data);
+              requestOtp(data.mobileNumber, "signup");
+            }}
+            onBack={() => setView("login")}
+            loading={loading}
+          />
+        )}
+
+        {view === "otp_verify" && (
+          <OtpVerifyScreen
+            phone={phone}
+            otp={otp}
+            setOtp={setOtp}
+            onVerify={verifyOtp}
+            onResend={() => requestOtp(phone)}
+            onBack={() => setView("login")}
+            loading={loading}
+          />
+        )}
+
+        {view === "reviews" && (
+          <ReviewsScreen reviews={[]} onBack={() => setView("main")} />
+        )}
+
+        {view === "service_form" && (
+          <ServicesScreen
+            initialData={editingService}
+            onSave={handleSaveService}
+            onCancel={() => setView("main")}
+            loading={loading}
+          />
+        )}
+
+        {view === "main" && (
+          <View style={styles.flex}>
             <View style={styles.tabRow}>
               {(["dashboard", "services", "offers", "profile"] as Tab[]).map((item) => (
                 <Pressable
@@ -147,84 +252,42 @@ export default function App() {
               ))}
             </View>
 
-            {tab === "dashboard" && (
-              <View style={styles.card}>
-                <View style={styles.row}>
-                  <Text style={styles.cardTitle}>Analytics</Text>
-                  <Pressable style={styles.smallBtn} onPress={loadDashboard}>
-                    <Text style={styles.smallBtnText}>Refresh</Text>
-                  </Pressable>
-                </View>
-                <View style={styles.grid}>
-                  <StatCard label="Views" value={dashboard?.totalViews ?? 0} />
-                  <StatCard label="Leads" value={dashboard?.totalLeads ?? 0} />
-                  <StatCard label="Contact Reveal" value={dashboard?.totalContactReveals ?? 0} />
-                  <StatCard label="WhatsApp Clicks" value={dashboard?.totalWhatsappClicks ?? 0} />
-                </View>
-              </View>
-            )}
+            <View style={styles.mainContent}>
+              {tab === "dashboard" && (
+                <DashboardScreen
+                  data={dashboard} loading={loading}
+                  onRefresh={loadDashboard} onViewReviews={() => setView("reviews")}
+                />
+              )}
 
-            {tab === "services" && (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Add Service</Text>
-                <TextInput
-                  placeholder="Service Name"
-                  style={styles.input}
-                  value={serviceName}
-                  onChangeText={setServiceName}
+              {tab === "services" && (
+                <ServiceListScreen
+                  services={services}
+                  onAdd={() => { setEditingService(null); setView("service_form"); }}
+                  onEdit={(s) => { setEditingService(s); setView("service_form"); }}
+                  onDelete={handleDeleteService}
+                  loading={loading}
                 />
-                <TextInput
-                  placeholder="Category"
-                  style={styles.input}
-                  value={serviceCategory}
-                  onChangeText={setServiceCategory}
-                />
-                <TextInput
-                  placeholder="Starting Price"
-                  keyboardType="numeric"
-                  style={styles.input}
-                  value={servicePrice}
-                  onChangeText={setServicePrice}
-                />
-                <Pressable style={styles.buttonPrimaryFull} onPress={saveService}>
-                  <Text style={styles.buttonPrimaryText}>Save Service</Text>
-                </Pressable>
-              </View>
-            )}
+              )}
 
-            {tab === "offers" && (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Create Offer</Text>
-                <TextInput
-                  placeholder="Offer Title"
-                  style={styles.input}
-                  value={offerTitle}
-                  onChangeText={setOfferTitle}
+              {tab === "profile" && (
+                <ProfileScreen
+                  profile={profile}
+                  onUpdate={() => setView("signup")}
+                  onLogout={() => { setToken(""); setView("login"); setPhone(""); setOtp(""); }}
+                  onDeleteAccount={() => { setToken(""); setView("login"); }}
+                  loading={loading}
                 />
-                <TextInput
-                  placeholder="Discount %"
-                  keyboardType="numeric"
-                  style={styles.input}
-                  value={offerDiscount}
-                  onChangeText={setOfferDiscount}
-                />
-                <Pressable style={styles.buttonPrimaryFull} onPress={saveOffer}>
-                  <Text style={styles.buttonPrimaryText}>Save Offer</Text>
-                </Pressable>
-              </View>
-            )}
+              )}
 
-            {tab === "profile" && (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Profile Setup</Text>
-                <Text style={styles.profileText}>Business profile APIs are ready in backend:</Text>
-                <Text style={styles.profileText}>PUT /api/vendor/me</Text>
-                <Text style={styles.profileText}>Fields: business name, owner, city, area, images, map link.</Text>
-              </View>
-            )}
-          </>
+              {tab === "offers" && (
+                <View style={styles.empty}><Text style={styles.muted}>Offers Management Coming Soon</Text></View>
+              )}
+            </View>
+          </View>
         )}
-      </ScrollView>
+      </View>
+      <Toast config={toastConfig} />
     </SafeAreaView>
   );
 }
@@ -232,123 +295,43 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
+    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 0
   },
-  content: {
-    padding: 16,
-    paddingBottom: 30,
-    gap: 12,
-  },
-  heading: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  subheading: {
-    color: colors.muted,
-    marginBottom: 6,
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 10,
-    textTransform: "capitalize",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
-    backgroundColor: "#FFF",
-  },
-  row: {
+  flex: { flex: 1 },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  centerContent: { flex: 1, padding: 24, justifyContent: "center" },
+  mainContent: { flex: 1, padding: 24, paddingTop: 10 },
+  header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    gap: 10,
-  },
-  buttonPrimary: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
+    gap: 12,
+    paddingHorizontal: 24,
     paddingVertical: 12,
-    flex: 1,
-    alignItems: "center",
+    marginTop: 8,
   },
-  buttonPrimaryFull: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  buttonSecondary: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    flex: 1,
-    alignItems: "center",
-    backgroundColor: "#F3E8FF",
-  },
-  buttonPrimaryText: {
-    color: "#FFF",
-    fontWeight: "700",
-  },
-  buttonSecondaryText: {
-    color: colors.primary,
-    fontWeight: "700",
-  },
+  headerLogo: { width: 50, height: 50 },
+  subheading: { fontSize: 13, color: colors.textMuted, fontWeight: "600" },
   tabRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    paddingHorizontal: 24,
     gap: 8,
+    marginVertical: 12,
   },
   tabButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: colors.card,
   },
   tabButtonActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  tabText: {
-    color: colors.text,
-    textTransform: "capitalize",
-  },
-  tabTextActive: {
-    color: "#FFF",
-  },
-  smallBtn: {
-    backgroundColor: "#EDE9FE",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  smallBtnText: {
-    color: colors.primary,
-    fontWeight: "600",
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  profileText: {
-    color: colors.muted,
-    marginBottom: 6,
-  },
+  tabText: { color: colors.text, fontWeight: "700", fontSize: 13, textTransform: "capitalize" },
+  tabTextActive: { color: colors.white },
+  empty: { flex: 1, padding: 40, alignItems: "center", justifyContent: "center" },
+  muted: { color: colors.textMuted },
 });
-

@@ -1,12 +1,27 @@
 {
   "expo": {
-    "name": "ShaadiHub Vendor",
-    "slug": "shaadihub-vendor",
+    "name": "Subhdin",
+    "slug": "subhdin-vendor",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/logo.png",
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "assetBundlePatterns": [
       "**/*"
-    ]
+    ],
+    "android": {
+      "package": "com.subhdin.vendor",
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.subhdin.vendor",
+      "supportsTablet": true
+    }
   }
 }
-

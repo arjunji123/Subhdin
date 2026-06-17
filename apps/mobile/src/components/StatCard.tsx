@@ -18,23 +18,30 @@ export function StatCard({ label, value }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: 20,
     borderWidth: 1,
     borderColor: colors.border,
     width: "48%",
-    marginBottom: 10,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
   },
   value: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 24,
+    fontWeight: "800",
     color: colors.text,
   },
   label: {
-    fontSize: 13,
-    color: colors.muted,
-    marginTop: 6,
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 4,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 });
-

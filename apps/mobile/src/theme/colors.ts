@@ -1,10 +1,16 @@
 export const colors = {
-  background: "#F5F7FB",
+  background: "#FFFFFF",
+  surface: "#F9FAFB",
   card: "#FFFFFF",
-  primary: "#7C3AED",
+  primary: "#B8860B", // Luxury Gold
+  primaryDark: "#8B6508",
+  secondary: "#1A1A1A", // Dark Grey/Black
   text: "#111827",
-  muted: "#6B7280",
-  success: "#059669",
+  textMuted: "#6B7280",
   border: "#E5E7EB",
+  success: "#10B981",
+  error: "#EF4444",
+  warning: "#F59E0B",
+  white: "#FFFFFF",
+  black: "#000000",
 };
-
