@@ -1,6 +1,8 @@
 import React from "react";
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from "../theme/colors";
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = {
   reviews: any[];
@@ -8,6 +10,8 @@ type Props = {
 };
 
 export function ReviewsScreen({ reviews, onBack }: Props) {
+  const insets = useSafeAreaInsets();
+
   const renderItem = ({ item }: { item: any }) => (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -25,15 +29,17 @@ export function ReviewsScreen({ reviews, onBack }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={onBack}>
-          <Text style={styles.back}>← Back</Text>
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 20) }]}>
+        <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={24} color={colors.primary} />
         </TouchableOpacity>
         <Text style={styles.title}>Customer Reviews</Text>
+        <View style={{ width: 40 }} />
       </View>
 
       {reviews.length === 0 ? (
         <View style={styles.empty}>
+          <Ionicons name="chatbubbles-outline" size={64} color={colors.border} />
           <Text style={styles.emptyText}>No reviews yet.</Text>
         </View>
       ) : (
@@ -42,6 +48,7 @@ export function ReviewsScreen({ reviews, onBack }: Props) {
           renderItem={renderItem}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
@@ -56,28 +63,28 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 24,
-    gap: 16,
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  back: {
-    fontSize: 16,
-    color: colors.primary,
-    fontWeight: "700",
+  backBtn: {
+    padding: 8,
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "800",
     color: colors.text,
   },
   list: {
     padding: 24,
-    paddingTop: 0,
     gap: 16,
   },
   card: {
     backgroundColor: colors.surface,
-    padding: 16,
-    borderRadius: 16,
+    padding: 20,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -98,12 +105,12 @@ const styles = StyleSheet.create({
   comment: {
     fontSize: 14,
     color: colors.text,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   date: {
     fontSize: 12,
     color: colors.textMuted,
-    marginTop: 8,
+    marginTop: 12,
   },
   reportBtn: {
     marginTop: 12,
@@ -118,8 +125,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingBottom: 100,
   },
   emptyText: {
     color: colors.textMuted,
+    fontSize: 16,
+    marginTop: 16,
   },
 });

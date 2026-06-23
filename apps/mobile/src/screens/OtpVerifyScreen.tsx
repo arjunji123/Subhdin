@@ -1,5 +1,6 @@
-import React from "react";
-import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity } from "react-native";
+import React, { useRef, useEffect } from "react";
+import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity, Animated } from "react-native";
+import * as Haptics from 'expo-haptics';
 import { colors } from "../theme/colors";
 import { Button } from "../components/Button";
 
@@ -11,9 +12,28 @@ type Props = {
   onResend: () => void;
   onBack: () => void;
   loading: boolean;
+  error?: string | null;
 };
 
-export function OtpVerifyScreen({ phone, otp, setOtp, onVerify, onResend, onBack, loading }: Props) {
+export function OtpVerifyScreen({ phone, otp, setOtp, onVerify, onResend, onBack, loading, error }: Props) {
+  const shakeAnimation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (error) {
+      shake();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [error]);
+
+  const shake = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnimation, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnimation, { toValue: 0, duration: 50, useNativeDriver: true }),
+    ]).start();
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -31,16 +51,25 @@ export function OtpVerifyScreen({ phone, otp, setOtp, onVerify, onResend, onBack
         </View>
 
         <View style={styles.form}>
-          <TextInput
-            placeholder="000000"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="number-pad"
-            maxLength={6}
-            style={[styles.input, otp.length > 0 && otp.length < 6 && styles.inputError]}
-            value={otp}
-            onChangeText={setOtp}
-            autoFocus
-          />
+          <Animated.View style={{ transform: [{ translateX: shakeAnimation }] }}>
+            <TextInput
+              placeholder="000000"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="number-pad"
+              maxLength={6}
+              style={[
+                styles.input,
+                !!error && styles.inputError
+              ]}
+              value={otp}
+              onChangeText={(v) => {
+                setOtp(v);
+              }}
+              autoFocus
+            />
+          </Animated.View>
+
+          {!!error && <Text style={styles.errorText}>{error}</Text>}
 
           <Button
             title="Verify & Login"
@@ -103,11 +132,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   form: {
-    gap: 24,
+    gap: 16,
   },
   input: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     borderRadius: 16,
     padding: 20,
@@ -119,6 +148,13 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: colors.error,
+    backgroundColor: "#FFF5F5",
+  },
+  errorText: {
+    color: colors.error,
+    textAlign: "center",
+    fontSize: 14,
+    fontWeight: "600",
   },
   footer: {
     flexDirection: "row",

@@ -78,4 +78,45 @@ export const vendorApi = {
       method: "DELETE",
       token,
     }),
+
+  // Uploads
+  getUploadSignature: (token: string) =>
+    apiRequest<{
+      signature: string;
+      timestamp: number;
+      apiKey: string;
+      cloudName: string;
+      folder: string;
+      publicId: string;
+    }>("/uploads/signature", { token }),
+
+  // Analytics
+  trackEvent: (token: string, vendorId: string, type: 'VIEW' | 'CONTACT_REVEAL' | 'WHATSAPP_CLICK' | 'LEAD', metadata: any = {}) =>
+    apiRequest("/analytics/events", {
+      method: "POST",
+      token,
+      body: { vendorId, type, source: 'mobile', metadata }
+    }),
+
+  // Customer Side APIs
+  getCustomerHome: (token: string, city: string) =>
+    apiRequest<any>(`/customer/home?city=${city}`, { token }),
+
+  getVendors: (token: string, params: any = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest<any[]>(`/vendors?${query}`, { token });
+  },
+
+  getVendorDetail: (token: string, id: string) =>
+    apiRequest<any>(`/vendors/${id}`, { token }),
+
+  getVendorServices: (token: string, vendorId: string) =>
+    apiRequest<any[]>(`/vendors/${vendorId}/services`, { token }),
+
+  submitReview: (token: string, vendorId: string, data: { rating: number; comment: string; userName: string }) =>
+    apiRequest("/vendor/reviews", {
+      method: "POST",
+      token,
+      body: { ...data, vendorId } // Vendor review endpoint usually needs vendorId in body if not in URL
+    }),
 };

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Subhdin",
-    "slug": "subhdin-vendor",
+    "slug": "shaadihub-monorepo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
@@ -16,12 +16,23 @@
     "android": {
       "package": "com.subhdin.vendor",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#ffffff"
       }
     },
     "ios": {
       "bundleIdentifier": "com.subhdin.vendor",
       "supportsTablet": true
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      "expo-asset",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ec09dc93-09e2-40cf-89a4-a669022e6e59"
+      }
     }
   }
 }

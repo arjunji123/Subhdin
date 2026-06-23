@@ -4,6 +4,8 @@ import { colors } from "../theme/colors";
 import { Button } from "../components/Button";
 import { InputField } from "../components/InputField";
 
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 type Props = {
   phone: string;
   setPhone: (val: string) => void;
@@ -14,6 +16,7 @@ type Props = {
 
 export function LoginScreen({ phone, setPhone, onSendOtp, onGoToSignup, loading }: Props) {
   const [touched, setTouched] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const getError = () => {
     if (!phone) return "Mobile number is required";
@@ -24,7 +27,7 @@ export function LoginScreen({ phone, setPhone, onSendOtp, onGoToSignup, loading 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
+      style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
     >
       <View style={styles.inner}>
         <View style={styles.logoContainer}>
@@ -54,7 +57,7 @@ export function LoginScreen({ phone, setPhone, onSendOtp, onGoToSignup, loading 
           />
 
           <Button
-            title="Get OTP"
+            title="Login"
             onPress={onSendOtp}
             loading={loading}
             disabled={!!getError()}

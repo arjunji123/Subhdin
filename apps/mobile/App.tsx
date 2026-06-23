@@ -6,49 +6,55 @@ import {
   View,
   Image,
   ActivityIndicator,
-  Pressable,
   Platform,
   StatusBar as RNStatusBar,
+  TouchableOpacity,
+  Alert,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { authApi, vendorApi } from "./src/api";
+import { uploadToCloudinary } from "./src/api/cloudinary";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { RegisterProfileScreen } from "./src/screens/RegisterProfileScreen";
+import { EditProfileScreen } from "./src/screens/EditProfileScreen";
 import { OtpVerifyScreen } from "./src/screens/OtpVerifyScreen";
 import { DashboardScreen } from "./src/screens/DashboardScreen";
 import { ServiceListScreen } from "./src/screens/ServiceListScreen";
 import { ServicesScreen } from "./src/screens/ServicesScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { ReviewsScreen } from "./src/screens/ReviewsScreen";
+import { GrowBusinessScreen } from "./src/screens/GrowBusinessScreen";
+import { OfferListScreen } from "./src/screens/OfferListScreen";
+import { OfferFormScreen } from "./src/screens/OfferFormScreen";
+import { HelpSupportScreen } from "./src/screens/HelpSupportScreen";
+import { UserHomeScreen } from "./src/screens/UserHomeScreen";
+import { VendorDiscoveryScreen } from "./src/screens/VendorDiscoveryScreen";
+import { VendorDetailScreen } from "./src/screens/VendorDetailScreen";
+import { VendorCompareScreen } from "./src/screens/VendorCompareScreen";
+import { AddReviewScreen } from "./src/screens/AddReviewScreen";
 import { colors } from "./src/theme/colors";
 
-type Tab = "dashboard" | "services" | "offers" | "profile";
-type ViewState = "login" | "signup" | "otp_verify" | "main" | "service_form" | "reviews";
+type Tab = "dashboard" | "services" | "offers" | "profile" | "user_home" | "user_search" | "user_bookings";
+type ViewState =
+  | "login" | "signup" | "otp_verify" | "main" | "service_form"
+  | "reviews" | "edit_profile" | "grow_business" | "offer_form" | "help_support"
+  | "user_discovery" | "user_vendor_detail" | "user_compare" | "user_add_review";
 
-const toastConfig = {
-  success: (props: any) => (
-    <BaseToast
-      {...props}
-      style={{ borderLeftColor: colors.success, backgroundColor: colors.white, borderRadius: 12 }}
-      contentContainerStyle={{ paddingHorizontal: 15 }}
-      text1Style={{ fontSize: 16, fontWeight: '700', color: colors.text }}
-      text2Style={{ fontSize: 13, color: colors.textMuted }}
-    />
-  ),
-  error: (props: any) => (
-    <ErrorToast
-      {...props}
-      style={{ borderLeftColor: colors.error, backgroundColor: colors.white, borderRadius: 12 }}
-      text1Style={{ fontSize: 16, fontWeight: '700', color: colors.text }}
-      text2Style={{ fontSize: 13, color: colors.textMuted }}
-    />
-  )
-};
+const TOKEN_KEY = "@subhdin_token";
+const ROLE_KEY = "@subhdin_role";
 
-export default function App() {
+function AppContent() {
+  const insets = useSafeAreaInsets();
   const [view, setView] = useState<ViewState>("login");
-  const [tab, setTab] = useState<Tab>("dashboard");
+  const [tab, setTab] = useState<Tab>("user_home");
+  const [authType, setAuthType] = useState<"login" | "signup">("login");
+  const [userRole, setUserRole] = useState<"user" | "vendor">("user");
 
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -58,10 +64,41 @@ export default function App() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [offers, setOffers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editingService, setEditingService] = useState<any>(null);
+  const [editingOffer, setEditingOffer] = useState<any>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [appReady, setAppReady] = useState(false);
+
+  // User Side States
+  const [homeData, setHomeData] = useState<any>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedVendor, setSelectedVendor] = useState<any>(null);
+  const [compareList, setCompareList] = useState<any[]>([]);
 
   const isLoggedIn = useMemo(() => token.length > 0, [token]);
+
+  useEffect(() => {
+    checkPersistedToken();
+  }, []);
+
+  async function checkPersistedToken() {
+    try {
+      const savedToken = await AsyncStorage.getItem(TOKEN_KEY);
+      const savedRole = await AsyncStorage.getItem(ROLE_KEY);
+      if (savedToken) {
+        setToken(savedToken);
+        if (savedRole) setUserRole(savedRole as any);
+      } else {
+        setLoading(false);
+      }
+    } catch (e) {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -72,28 +109,42 @@ export default function App() {
   async function loadInitialData() {
     setLoading(true);
     try {
-      const prof = await vendorApi.getProfile(token);
-      setProfile(prof);
+      // Get role from state or storage
+      const currentRole = userRole || await AsyncStorage.getItem(ROLE_KEY) || 'user';
 
-      if (signupData) {
-        await vendorApi.updateProfile(token, signupData);
-        const updatedProf = await vendorApi.getProfile(token);
-        setProfile(updatedProf);
-        setSignupData(null);
-      }
-
-      if (!prof.businessName && !signupData) {
-        setView("signup");
+      let prof;
+      if (currentRole === 'vendor') {
+        prof = await vendorApi.getProfile(token);
+        setProfile(prof);
+        await Promise.all([loadDashboard(), loadServices(), loadOffers()]);
       } else {
-        setView("main");
-        await Promise.all([loadDashboard(), loadServices()]);
+        // Try to get customer profile if endpoint exists, otherwise fallback to session
+        try {
+            await loadHomeData();
+
+            // If /vendor/me fails (401), we use the profile from login
+            const p = await vendorApi.getProfile(token).catch(() => null);
+            if (p) setProfile(p);
+        } catch (e) {
+            console.log("Profile fetch issues for user");
+        }
       }
+
+      setView("main");
+      setTab(currentRole === "vendor" ? "dashboard" : "user_home");
     } catch (err) {
-      setToken("");
-      setView("login");
+      // If profile fetch fails, logout
+      if (token) await handleLogout();
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadHomeData() {
+    try {
+      const data = await vendorApi.getCustomerHome(token, "Jaipur");
+      setHomeData(data);
+    } catch (err) {}
   }
 
   async function loadDashboard() {
@@ -110,22 +161,28 @@ export default function App() {
     } catch (err) {}
   }
 
-  // --- Auth Actions ---
+  async function loadOffers() {
+    try {
+      const data = await vendorApi.getOffers(token);
+      setOffers(data);
+    } catch (err) {}
+  }
+
   async function requestOtp(targetPhone: string, type: "login" | "signup" = "login") {
     if (!targetPhone || targetPhone.length < 10) {
-      return Toast.show({ type: 'error', text1: 'Invalid Number', text2: 'Enter a valid 10-digit number' });
+      return Alert.alert("Invalid Number", "Enter a valid 10-digit number");
     }
     setLoading(true);
+    setAuthType(type);
+    setAuthError(null);
     try {
-      const data = type === "login"
-        ? await authApi.loginRequestOtp(targetPhone)
-        : await authApi.requestOtp(targetPhone);
-
+      // Always use requestOtp unified endpoint
+      await authApi.requestOtp(targetPhone);
       setPhone(targetPhone);
       setView("otp_verify");
-      Toast.show({ type: 'success', text1: 'OTP Sent', text2: `Use code ${data.debugCode} for testing` });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Failed', text2: err.message });
+      Alert.alert("Oops!", "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -133,35 +190,80 @@ export default function App() {
 
   async function verifyOtp() {
     if (!otp || otp.length < 6) {
-      return Toast.show({ type: 'error', text1: 'Invalid OTP', text2: 'Please enter the 6-digit code' });
+      setAuthError("Please enter 6-digit OTP");
+      return;
     }
     setLoading(true);
+    setAuthError(null);
     try {
-      const data = await authApi.verifyOtp(phone, otp);
+      const role = authType === "signup" ? signupData.role : userRole;
+      const data = await authApi.verifyOtp(phone, otp, role, authType === "signup" ? signupData : {});
+
+      // CRITICAL: Use the actual role from the backend response
+      const verifiedRole = data.user.role;
+
+      await AsyncStorage.setItem(TOKEN_KEY, data.token);
+      await AsyncStorage.setItem(ROLE_KEY, verifiedRole);
+
+      setUserRole(verifiedRole);
+      setProfile(data.user);
       setToken(data.token);
-      Toast.show({ type: 'success', text1: 'Verified', text2: 'Login successful!' });
+      setSignupData(null);
+
+      // Navigate to the correct flow immediately
+      setView("main");
+      setTab(verifiedRole === "vendor" ? "dashboard" : "user_home");
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Verification Failed', text2: err.message });
+      setAuthError("Incorrect code. Please check and try again.");
     } finally {
       setLoading(false);
     }
   }
 
-  // --- Service Actions ---
-  async function handleSaveService(data: any) {
+  async function handleLogout() {
+    await AsyncStorage.multiRemove([TOKEN_KEY, ROLE_KEY]);
+    setToken("");
+    setPhone("");
+    setOtp("");
+    setView("login");
+  }
+
+  async function handleUpdateProfile(data: any) {
     setLoading(true);
     try {
+      await vendorApi.updateProfile(token, data);
+      await loadInitialData();
+      setView("main");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Profile updated");
+    } catch (err) {
+      Alert.alert("Error", "Update failed. Please check your connection.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSaveService(data: any, selectedImages: string[]) {
+    setLoading(true);
+    try {
+      const existingUrls = selectedImages.filter(uri => uri.startsWith('http'));
+      const localUris = selectedImages.filter(uri => !uri.startsWith('http'));
+      const newUrls = await Promise.all(localUris.map(uri => uploadToCloudinary(token, uri)));
+      const finalData = { ...data, galleryImages: [...existingUrls, ...newUrls] };
+
       if (editingService) {
-        await vendorApi.updateService(token, editingService.id, data);
-        Toast.show({ type: 'success', text1: 'Updated', text2: 'Service updated successfully' });
+        await vendorApi.updateService(token, editingService.id, finalData);
       } else {
-        await vendorApi.createService(token, data);
-        Toast.show({ type: 'success', text1: 'Created', text2: 'New service added successfully' });
+        await vendorApi.createService(token, finalData);
       }
       await loadServices();
       setView("main");
-    } catch (err) {
-      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to save service' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Service listing saved!");
+    } catch (err: any) {
+      Alert.alert("Error", "Failed to save service. Check all required fields.");
     } finally {
       setLoading(false);
     }
@@ -170,168 +272,281 @@ export default function App() {
   async function handleDeleteService(id: string) {
     try {
       await vendorApi.deleteService(token, id);
-      Toast.show({ type: 'success', text1: 'Deleted', text2: 'Service removed' });
       await loadServices();
+      Alert.alert("Success", "Listing removed.");
     } catch (err) {
-      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to delete service' });
+      Alert.alert("Error", "Could not delete. Please try again.");
     }
   }
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+  async function handleSaveOffer(data: any) {
+    setLoading(true);
+    try {
+      if (editingOffer) {
+        await vendorApi.updateOffer(token, editingOffer.id, data);
+      } else {
+        await vendorApi.createOffer(token, data);
+      }
+      await loadOffers();
+      setView("main");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Offer published!");
+    } catch (err) {
+      Alert.alert("Error", "Failed to save offer.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-      {view === "main" && (
-        <View style={styles.header}>
-          <Image source={require("./assets/logo.png")} style={styles.headerLogo} resizeMode="contain" />
-          <View>
-            <Text style={styles.subheading}>Events Made Easy</Text>
-          </View>
-        </View>
-      )}
+  async function handleDeleteOffer(id: string) {
+    try {
+      await vendorApi.deleteOffer(token, id);
+      await loadOffers();
+      Alert.alert("Success", "Offer removed.");
+    } catch (err) {
+      Alert.alert("Error", "Delete failed.");
+    }
+  }
+
+  async function handleToggleOffer(offer: any) {
+    try {
+        await vendorApi.updateOffer(token, offer.id, { isActive: !offer.isActive });
+        await loadOffers();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (err) {}
+  }
+
+  if (loading && !isLoggedIn && view === "login") {
+    return (
+      <View style={styles.centered}>
+        <Image source={require("./assets/logo.png")} style={{ width: 150, height: 150, marginBottom: 20 }} resizeMode="contain" />
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  }
+
+  async function handleTrackEvent(vendorId: string, type: 'VIEW' | 'CONTACT_REVEAL' | 'WHATSAPP_CLICK' | 'LEAD') {
+    if (!token) return;
+    try {
+      await vendorApi.trackEvent(token, vendorId, type);
+    } catch (err) {}
+  }
+
+  return (
+    <View style={styles.container}>
+      <StatusBar style="dark" />
 
       <View style={styles.flex}>
         {view === "login" && (
           <View style={styles.centerContent}>
-            <LoginScreen
-              phone={phone} setPhone={setPhone}
-              onSendOtp={() => requestOtp(phone, "login")}
-              onGoToSignup={() => setView("signup")}
-              loading={loading}
-            />
+            <LoginScreen phone={phone} setPhone={setPhone} onSendOtp={() => requestOtp(phone, "login")} onGoToSignup={() => setView("signup")} loading={loading} />
           </View>
         )}
 
         {view === "signup" && (
-          <RegisterProfileScreen
-            onComplete={(data) => {
-              setSignupData(data);
-              requestOtp(data.mobileNumber, "signup");
-            }}
-            onBack={() => setView("login")}
-            loading={loading}
-          />
+          <RegisterProfileScreen onComplete={(data, role) => {
+            setSignupData({...data, role});
+            requestOtp(data.mobileNumber, "signup");
+          }} onBack={() => setView("login")} loading={loading} />
         )}
 
         {view === "otp_verify" && (
-          <OtpVerifyScreen
-            phone={phone}
-            otp={otp}
-            setOtp={setOtp}
-            onVerify={verifyOtp}
-            onResend={() => requestOtp(phone)}
-            onBack={() => setView("login")}
-            loading={loading}
-          />
+          <OtpVerifyScreen phone={phone} otp={otp} setOtp={(v) => { setOtp(v); setAuthError(null); }} onVerify={verifyOtp} onResend={() => requestOtp(phone, authType)} onBack={() => setView("login")} loading={loading} error={authError} />
         )}
 
-        {view === "reviews" && (
-          <ReviewsScreen reviews={[]} onBack={() => setView("main")} />
-        )}
+        {view === "reviews" && <ReviewsScreen reviews={[]} onBack={() => setView("main")} />}
+        {view === "grow_business" && <GrowBusinessScreen onBack={() => setView("main")} onContactSupport={() => setView("help_support")} />}
+        {view === "help_support" && <HelpSupportScreen onBack={() => setView(isLoggedIn ? "main" : "login")} />}
+        {view === "edit_profile" && <EditProfileScreen profile={profile} onSave={handleUpdateProfile} onBack={() => setView("main")} loading={loading} />}
+        {view === "service_form" && <ServicesScreen initialData={editingService} onSave={handleSaveService} onCancel={() => setView("main")} loading={loading} isReadOnly={isReadOnly} />}
+        {view === "offer_form" && <OfferFormScreen initialData={editingOffer} onSave={handleSaveOffer} onCancel={() => setView("main")} loading={loading} />}
 
-        {view === "service_form" && (
-          <ServicesScreen
-            initialData={editingService}
-            onSave={handleSaveService}
-            onCancel={() => setView("main")}
-            loading={loading}
-          />
+        {/* User Discovery Views */}
+        {view === "user_discovery" && (
+            <VendorDiscoveryScreen
+                token={token}
+                category={selectedCategory}
+                initialQuery={searchQuery}
+                onBack={() => setView("main")}
+                onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }}
+            />
+        )}
+        {view === "user_vendor_detail" && (
+            <VendorDetailScreen
+                token={token}
+                vendorId={selectedVendor?.id}
+                onBack={() => setView(selectedCategory || searchQuery ? "user_discovery" : "main")}
+                onCompare={() => {
+                    setCompareList([selectedVendor, ...compareList.filter(x => x.id !== selectedVendor.id)].slice(0,3));
+                    setView("user_compare");
+                }}
+                onAddReview={() => setView("user_add_review")}
+                onTrackAction={(type) => handleTrackEvent(selectedVendor.id, type)}
+            />
+        )}
+        {view === "user_compare" && (
+            <VendorCompareScreen
+                vendors={compareList}
+                onBack={() => setView("user_vendor_detail")}
+            />
+        )}
+        {view === "user_add_review" && (
+            <AddReviewScreen
+                vendorName={selectedVendor?.businessName}
+                onBack={() => setView("user_vendor_detail")}
+                onSubmit={async (r, c, u) => {
+                    setLoading(true);
+                    try {
+                      await vendorApi.submitReview(token, selectedVendor.id, { rating: r, comment: c, userName: u });
+                      Alert.alert("Success", "Review submitted successfully!");
+                      setView("user_vendor_detail");
+                    } catch (error) {
+                      Alert.alert("Error", "Failed to submit review");
+                    } finally {
+                      setLoading(false);
+                    }
+                }}
+                loading={loading}
+            />
         )}
 
         {view === "main" && (
           <View style={styles.flex}>
-            <View style={styles.tabRow}>
-              {(["dashboard", "services", "offers", "profile"] as Tab[]).map((item) => (
-                <Pressable
-                  key={item}
-                  onPress={() => setTab(item)}
-                  style={[styles.tabButton, tab === item && styles.tabButtonActive]}
-                >
-                  <Text style={[styles.tabText, tab === item && styles.tabTextActive]}>{item}</Text>
-                </Pressable>
-              ))}
-            </View>
+            {userRole === "vendor" ? (
+              <>
+                {tab === "dashboard" && (
+                  <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+                    <Image source={require("./assets/logo.png")} style={styles.headerLogo} resizeMode="contain" />
+                    <View style={styles.headerInfo}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.welcomeText}>Welcome back,</Text>
+                        <Text style={styles.ownerName} numberOfLines={1}>{profile?.ownerName || "Partner"}</Text>
+                        <View style={styles.ratingRow}>
+                          <Ionicons name="star" size={14} color="#B8860B" />
+                          <Text style={styles.headerRatingText}>{dashboard?.avgRating ? dashboard.avgRating.toFixed(1) : "5.0"}</Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity style={styles.growBtn} onPress={() => setView("grow_business")}>
+                        <Ionicons name="rocket-sharp" size={24} color={colors.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
 
-            <View style={styles.mainContent}>
-              {tab === "dashboard" && (
-                <DashboardScreen
-                  data={dashboard} loading={loading}
-                  onRefresh={loadDashboard} onViewReviews={() => setView("reviews")}
-                />
-              )}
+                <View style={[styles.mainContent, tab !== "dashboard" && { paddingTop: insets.top + 10 }]}>
+                  {tab === "dashboard" && <DashboardScreen data={dashboard} loading={loading} onRefresh={loadDashboard} onViewReviews={() => setView("reviews")} />}
+                  {tab === "services" && <ServiceListScreen services={services} onAdd={() => { setEditingService(null); setIsReadOnly(false); setView("service_form"); }} onEdit={(s) => { setEditingService(s); setIsReadOnly(false); setView("service_form"); }} onView={(s) => { setEditingService(s); setIsReadOnly(true); setView("service_form"); }} onDelete={handleDeleteService} loading={loading} />}
+                  {tab === "offers" && <OfferListScreen offers={offers} onAdd={() => { setEditingOffer(null); setView("offer_form"); }} onEdit={(o) => { setEditingOffer(o); setView("offer_form"); }} onDelete={handleDeleteOffer} onToggleActive={handleToggleOffer} loading={loading} />}
+                  {tab === "profile" && <ProfileScreen profile={profile} onUpdate={() => setView("edit_profile")} onLogout={handleLogout} onHelp={() => setView("help_support")} onDeleteAccount={handleLogout} loading={loading} />}
+                </View>
+              </>
+            ) : (
+              <View style={styles.mainContent}>
+                 {tab === "user_home" && (
+                    <UserHomeScreen
+                        userName={profile?.fullName || profile?.name}
+                        homeData={homeData}
+                        onCategoryPress={(cat) => {
+                            setSelectedCategory(cat);
+                            setSearchQuery("");
+                            setView("user_discovery");
+                        }}
+                        onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }}
+                        onSearchPress={(q) => {
+                            setSelectedCategory("");
+                            setSearchQuery(q || "");
+                            setView("user_discovery");
+                        }}
+                    />
+                 )}
+                 {(tab === "user_search" || tab === "user_bookings") && (
+                   <View style={styles.centered}>
+                     <Text style={styles.textMuted}>Coming Soon</Text>
+                   </View>
+                 )}
+                 {tab === "profile" && <ProfileScreen profile={profile} onUpdate={() => setView("edit_profile")} onLogout={handleLogout} onHelp={() => setView("help_support")} onDeleteAccount={handleLogout} loading={loading} />}
+              </View>
+            )}
 
-              {tab === "services" && (
-                <ServiceListScreen
-                  services={services}
-                  onAdd={() => { setEditingService(null); setView("service_form"); }}
-                  onEdit={(s) => { setEditingService(s); setView("service_form"); }}
-                  onDelete={handleDeleteService}
-                  loading={loading}
-                />
-              )}
-
-              {tab === "profile" && (
-                <ProfileScreen
-                  profile={profile}
-                  onUpdate={() => setView("signup")}
-                  onLogout={() => { setToken(""); setView("login"); setPhone(""); setOtp(""); }}
-                  onDeleteAccount={() => { setToken(""); setView("login"); }}
-                  loading={loading}
-                />
-              )}
-
-              {tab === "offers" && (
-                <View style={styles.empty}><Text style={styles.muted}>Offers Management Coming Soon</Text></View>
-              )}
+            {/* Glassy Bottom Navigation Bar */}
+            <View style={[styles.navContainer, { paddingBottom: insets.bottom }]}>
+               {Platform.OS === 'ios' ? (
+                 <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="light" />
+               ) : (
+                 <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 255, 0.95)' }]} />
+               )}
+              <View style={styles.bottomNav}>
+                {userRole === "vendor" ? (
+                  <>
+                    <NavButton active={tab === "dashboard"} icon="grid" label="Home" onPress={() => setTab("dashboard")} />
+                    <NavButton active={tab === "services"} icon="briefcase" label="Services" onPress={() => setTab("services")} />
+                    <NavButton active={tab === "offers"} icon="flame" label="Offers" onPress={() => setTab("offers")} />
+                    <NavButton active={tab === "profile"} icon="person" label="Account" onPress={() => setTab("profile")} />
+                  </>
+                ) : (
+                  <>
+                    <NavButton active={tab === "user_home"} icon="home" label="Discover" onPress={() => setTab("user_home")} />
+                    <NavButton active={tab === "user_search"} icon="search" label="Search" onPress={() => setTab("user_search")} />
+                    <NavButton active={tab === "user_bookings"} icon="calendar" label="Bookings" onPress={() => setTab("user_bookings")} />
+                    <NavButton active={tab === "profile"} icon="person" label="Profile" onPress={() => setTab("profile")} />
+                  </>
+                )}
+              </View>
             </View>
           </View>
         )}
       </View>
-      <Toast config={toastConfig} />
-    </SafeAreaView>
+    </View>
+  );
+}
+
+function NavButton({ active, icon, label, onPress }: any) {
+  return (
+    <TouchableOpacity style={styles.navBtn} onPress={onPress}>
+      <Ionicons name={active ? icon : `${icon}-outline`} size={24} color={active ? colors.primary : colors.textMuted} />
+      <Text style={[styles.navLabel, active && styles.navLabelActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.white,
-    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 0
-  },
+  container: { flex: 1, backgroundColor: colors.white },
   flex: { flex: 1 },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.white },
   centerContent: { flex: 1, padding: 24, justifyContent: "center" },
-  mainContent: { flex: 1, padding: 24, paddingTop: 10 },
-  header: {
+  mainContent: { flex: 1, paddingBottom: 80 }, // Account for absolute bottom nav
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 24, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.white },
+  headerLogo: { width: 72, height: 72, marginLeft: -10 },
+  headerInfo: { flex: 1, flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginLeft: 8 },
+  welcomeText: { fontSize: 12, color: colors.textMuted, fontWeight: "600", textTransform: 'uppercase' },
+  ownerName: { fontSize: 18, fontWeight: "900", color: colors.text, letterSpacing: -0.5 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  headerRatingText: { fontSize: 13, fontWeight: "800", color: "#B8860B" },
+  growBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center" },
+  navContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+    overflow: 'hidden',
+  },
+  bottomNav: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    marginTop: 8,
+    height: 65,
+    paddingTop: 10,
   },
-  headerLogo: { width: 50, height: 50 },
-  subheading: { fontSize: 13, color: colors.textMuted, fontWeight: "600" },
-  tabRow: {
-    flexDirection: "row",
-    paddingHorizontal: 24,
-    gap: 8,
-    marginVertical: 12,
-  },
-  tabButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  tabButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  tabText: { color: colors.text, fontWeight: "700", fontSize: 13, textTransform: "capitalize" },
-  tabTextActive: { color: colors.white },
-  empty: { flex: 1, padding: 40, alignItems: "center", justifyContent: "center" },
-  muted: { color: colors.textMuted },
+  navBtn: { flex: 1, alignItems: "center", justifyContent: "center" },
+  navLabel: { fontSize: 10, color: colors.textMuted, marginTop: 5, fontWeight: "600" },
+  navLabelActive: { color: colors.primary, fontWeight: "800" },
+  textMuted: { color: colors.textMuted, fontSize: 16, fontWeight: "600" },
 });
