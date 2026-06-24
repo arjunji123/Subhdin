@@ -13,6 +13,7 @@ import {
   Animated,
   Platform,
   FlatList,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../theme/colors";
@@ -40,6 +41,7 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRevealed, setIsRevealed] = useState(false);
+  const [selectedService, setSelectedService] = useState<any>(null);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const revealScale = useRef(new Animated.Value(0)).current;
@@ -194,7 +196,7 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
                     </View>
                 </View>
                 <View style={styles.scoreCard}>
-                    <Text style={styles.scoreVal}>{vendor?.averageRating?.toFixed(1) || "4.5"}</Text>
+                    <Text style={styles.scoreVal}>{vendor?.averageRating ? vendor.averageRating.toFixed(1) : "0"}</Text>
                     <View style={styles.row}>
                         <Ionicons name="star" size={10} color={colors.white} />
                         <Text style={styles.revCount}>({vendor?.reviewCount || reviews.length})</Text>
@@ -240,10 +242,10 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
             <Text style={styles.sectionHeading}>Ratings Analysis</Text>
             <View style={styles.breakdownRow}>
               <View style={styles.averageBox}>
-                <Text style={styles.bigRating}>{vendor?.averageRating || "4.5"}</Text>
+                <Text style={styles.bigRating}>{vendor?.averageRating ? vendor.averageRating.toFixed(1) : "0"}</Text>
                 <View style={styles.starsRow}>
                   {[1, 2, 3, 4, 5].map(i => (
-                    <Ionicons key={i} name="star" size={16} color={i <= Math.round(vendor?.averageRating || 4.5) ? colors.primary : colors.border} />
+                    <Ionicons key={i} name="star" size={16} color={i <= Math.round(vendor?.averageRating || 0) ? colors.primary : colors.border} />
                   ))}
                 </View>
                 <Text style={styles.totalReviewsText}>{vendor?.reviewCount || reviews.length} Reviews</Text>
@@ -272,7 +274,9 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
           <View style={styles.section}>
              <Text style={styles.sectionHeading}>Services & Packages</Text>
              {services.map((service: any) => (
-                <ServiceCard key={service.id} service={service} getSocialIcon={getSocialIcon} />
+                <TouchableOpacity key={service.id} activeOpacity={0.9} onPress={() => setSelectedService(service)}>
+                    <ServiceCard service={service} getSocialIcon={getSocialIcon} />
+                </TouchableOpacity>
              ))}
           </View>
 
@@ -323,6 +327,73 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
           <Ionicons name="logo-whatsapp" size={26} color={colors.white} /><Text style={styles.dockWhatsappText}>Enquire Now</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Service Detail Modal */}
+      <Modal visible={!!selectedService} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+              <View style={styles.serviceModal}>
+                  <View style={styles.dragIndicator} />
+                  <View style={styles.modalHeader}>
+                      <Text style={styles.modalTitle}>Service Details</Text>
+                      <TouchableOpacity onPress={() => setSelectedService(null)} style={styles.closeBtn}>
+                          <Ionicons name="close" size={24} color={colors.text} />
+                      </TouchableOpacity>
+                  </View>
+
+                  {selectedService && (
+                      <ScrollView showsVerticalScrollIndicator={false}>
+                          <View style={styles.modalHero}>
+                            {selectedService.galleryImages?.length > 0 ? (
+                                <Image source={{ uri: selectedService.galleryImages[0] }} style={styles.modalHeroImage} />
+                            ) : (
+                                <View style={styles.noImagePlaceholder}>
+                                    <Ionicons name="images-outline" size={50} color={colors.border} />
+                                </View>
+                            )}
+                          </View>
+
+                          <View style={styles.modalInfo}>
+                              <Text style={styles.modalServiceName}>{selectedService.serviceName}</Text>
+                              <View style={styles.modalPriceBadge}>
+                                  <Text style={styles.modalPriceText}>₹{selectedService.price}</Text>
+                              </View>
+
+                              <Text style={styles.modalLabel}>Description</Text>
+                              <Text style={styles.modalDesc}>{selectedService.description}</Text>
+
+                              <View style={styles.modalStatsRow}>
+                                  <View style={styles.modalStatItem}>
+                                      <Ionicons name="people" size={20} color={colors.primary} />
+                                      <Text style={styles.modalStatLabel}>Capacity</Text>
+                                      <Text style={styles.modalStatValue}>{selectedService.capacity || "N/A"}</Text>
+                                  </View>
+                                  <View style={styles.modalStatItem}>
+                                      <Ionicons name="pricetag" size={20} color={colors.primary} />
+                                      <Text style={styles.modalStatLabel}>Category</Text>
+                                      <Text style={styles.modalStatValue}>{selectedService.category}</Text>
+                                  </View>
+                              </View>
+
+                              {selectedService.highlights?.length > 0 && (
+                                  <>
+                                    <Text style={styles.modalLabel}>Highlights</Text>
+                                    <View style={styles.modalHighlights}>
+                                        {selectedService.highlights.map((h: string, i: number) => (
+                                            <View key={i} style={styles.modalTag}>
+                                                <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                                                <Text style={styles.modalTagText}>{h}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                  </>
+                              )}
+                          </View>
+                          <View style={{ height: 40 }} />
+                      </ScrollView>
+                  )}
+              </View>
+          </View>
+      </Modal>
     </View>
   );
 }
@@ -480,4 +551,25 @@ const styles = StyleSheet.create({
   dockCall: { width: 70, height: 70, backgroundColor: colors.secondary, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   dockWhatsapp: { flex: 1, height: 70, backgroundColor: '#25D366', borderRadius: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
   dockWhatsappText: { color: colors.white, fontSize: 18, fontWeight: '900' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  serviceModal: { backgroundColor: colors.white, borderTopLeftRadius: 40, borderTopRightRadius: 40, height: '90%', padding: 24 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 22, fontWeight: '900', color: colors.text },
+  closeBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceDark, alignItems: 'center', justifyContent: 'center' },
+  modalHero: { height: 250, borderRadius: 30, overflow: 'hidden', marginBottom: 24 },
+  modalHeroImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  noImagePlaceholder: { flex: 1, backgroundColor: colors.surfaceDark, alignItems: 'center', justifyContent: 'center' },
+  modalInfo: { gap: 16 },
+  modalServiceName: { fontSize: 24, fontWeight: '900', color: colors.text },
+  modalPriceBadge: { backgroundColor: colors.primaryLight, paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, alignSelf: 'flex-start' },
+  modalPriceText: { color: colors.primary, fontSize: 18, fontWeight: '900' },
+  modalLabel: { fontSize: 13, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginTop: 10 },
+  modalDesc: { fontSize: 16, color: colors.text, lineHeight: 24, opacity: 0.8 },
+  modalStatsRow: { flexDirection: 'row', gap: 20, marginTop: 10 },
+  modalStatItem: { flex: 1, backgroundColor: colors.background, padding: 15, borderRadius: 20, alignItems: 'center', gap: 6 },
+  modalStatLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '700' },
+  modalStatValue: { fontSize: 15, fontWeight: '800', color: colors.text },
+  modalHighlights: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 5 },
+  modalTag: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surfaceDark, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  modalTagText: { fontSize: 13, fontWeight: '700', color: colors.text },
 });

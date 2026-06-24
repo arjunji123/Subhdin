@@ -115,34 +115,42 @@ function AppContent() {
     setLoading(true);
     try {
       // Get role directly from storage to be 100% sure we have the latest
-      const currentRole = await AsyncStorage.getItem(ROLE_KEY) || userRole || 'user';
+      const savedRole = await AsyncStorage.getItem(ROLE_KEY);
+      const currentRole = savedRole || userRole || 'user';
 
-      console.log("Loading initial data for role:", currentRole);
+      console.log("🔄 Loading initial data for role:", currentRole);
 
       if (currentRole === 'vendor') {
         const prof = await vendorApi.getProfile(token);
         setProfile(prof);
-        await Promise.all([loadDashboard(), loadServices(), loadOffers()]);
+        // Load vendor specific data
+        const [dash, srvs, offs] = await Promise.all([
+            vendorApi.getDashboard(token),
+            vendorApi.getServices(token),
+            vendorApi.getOffers(token)
+        ]);
+        setDashboard(dash);
+        setServices(srvs);
+        setOffers(offs);
       } else {
-        // FOR USERS: Fetch real user profile data
+        // FOR USERS
         try {
             const prof = await vendorApi.getUserProfile(token);
             setProfile(prof);
             await AsyncStorage.setItem("@subhdin_user_data", JSON.stringify(prof));
         } catch (e) {
-            console.log("User profile fetch failed, using storage fallback");
             const savedProfile = await AsyncStorage.getItem("@subhdin_user_data");
             if (savedProfile) setProfile(JSON.parse(savedProfile));
         }
-
         await loadFeaturedVendors();
       }
 
+      // Finalize view state
+      setUserRole(currentRole as any);
       setView("main");
       setTab(currentRole === "vendor" ? "dashboard" : "user_home");
     } catch (err: any) {
       console.error("Initial load failed:", err);
-      // If it's a 401, we MUST logout to clear stale tokens
       if (err.message?.includes("401") || err.status === 401) {
         await handleLogout();
       }
@@ -238,10 +246,17 @@ function AppContent() {
   }
 
   async function handleLogout() {
-    await AsyncStorage.multiRemove([TOKEN_KEY, ROLE_KEY]);
+    try {
+        await AsyncStorage.multiRemove([TOKEN_KEY, ROLE_KEY, "@subhdin_user_data"]);
+    } catch(e) {}
     setToken("");
     setPhone("");
     setOtp("");
+    setUserRole("user");
+    setProfile(null);
+    setDashboard(null);
+    setServices([]);
+    setOffers([]);
     setView("login");
   }
 
@@ -434,11 +449,14 @@ function AppContent() {
 
         {view === "celebration" && (
             <View style={styles.celebrationContainer}>
-                <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
                 <Animated.View style={styles.celebrationContent}>
-                    <Ionicons name="sparkles" size={80} color={colors.primary} />
-                    <Text style={styles.celebrationTitle}>Thank You!</Text>
-                    <Text style={styles.celebrationSub}>Your review helps the community grow.</Text>
+                    <View style={styles.iconCircle}>
+                        <Ionicons name="star" size={50} color={colors.primary} />
+                    </View>
+                    <Text style={styles.celebrationTitle}>Magical Review!</Text>
+                    <Text style={styles.celebrationSub}>Your story has been added to our community. Thank you for making Subhdin better.</Text>
+                    <View style={styles.goldLine} />
                 </Animated.View>
             </View>
         )}
@@ -492,16 +510,17 @@ function AppContent() {
                         }}
                     />
                  )}
-                 {tab === "user_search" && (
+                 {tab === "user_vendors" && (
                      <VendorDiscoveryScreen
                         token={token}
                         onBack={() => setTab("user_home")}
                         onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }}
                     />
                  )}
-                 {tab === "user_vendors" && (
+                 {tab === "offers" && (
                      <VendorDiscoveryScreen
                         token={token}
+                        category="Offers"
                         onBack={() => setTab("user_home")}
                         onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }}
                     />
@@ -528,8 +547,8 @@ function AppContent() {
                 ) : (
                   <>
                     <NavButton active={tab === "user_home"} icon="home" label="Explore" onPress={() => setTab("user_home")} />
-                    <NavButton active={tab === "user_search"} icon="search" label="Search" onPress={() => setTab("user_search")} />
                     <NavButton active={tab === "user_vendors"} icon="people" label="Vendors" onPress={() => setTab("user_vendors")} />
+                    <NavButton active={tab === "offers"} icon="flame" label="Offers" onPress={() => setTab("offers")} />
                     <NavButton active={tab === "profile"} icon="person" label="Profile" onPress={() => setTab("profile")} />
                   </>
                 )}
@@ -592,7 +611,23 @@ const styles = StyleSheet.create({
   navLabelActive: { color: colors.primary, fontWeight: "800" },
   textMuted: { color: colors.textMuted, fontSize: 16, fontWeight: "600" },
   celebrationContainer: { ...StyleSheet.absoluteFillObject, zIndex: 999, alignItems: 'center', justifyContent: 'center' },
-  celebrationContent: { alignItems: 'center', gap: 10 },
-  celebrationTitle: { fontSize: 32, fontWeight: '900', color: colors.primary, marginTop: 10 },
-  celebrationSub: { fontSize: 16, color: colors.white, textAlign: 'center', paddingHorizontal: 40, fontWeight: '600' },
+  celebrationContent: {
+    alignItems: 'center',
+    gap: 20,
+    backgroundColor: 'rgba(15, 15, 15, 0.98)',
+    padding: 40,
+    borderRadius: 45,
+    width: 350,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 15 },
+    shadowOpacity: 0.4,
+    shadowRadius: 25,
+    elevation: 15
+  },
+  iconCircle: { width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(184, 134, 11, 0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.primary },
+  celebrationTitle: { fontSize: 30, fontWeight: '900', color: colors.primary, textAlign: 'center', letterSpacing: -0.5 },
+  celebrationSub: { fontSize: 15, color: 'rgba(255,255,255,0.7)', textAlign: 'center', lineHeight: 24, fontWeight: '600', paddingHorizontal: 10 },
+  goldLine: { width: 80, height: 3, backgroundColor: colors.primary, borderRadius: 2, marginTop: 5, opacity: 0.6 },
 });

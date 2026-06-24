@@ -92,7 +92,7 @@ export function VendorDiscoveryScreen({ token, category, initialQuery, onBack, o
                     </View>
                     <View style={styles.ratingPill}>
                         <Ionicons name="star" size={10} color={colors.white} />
-                        <Text style={styles.ratingText}>{item.averageRating || "4.5"}</Text>
+                        <Text style={styles.ratingText}>{item.averageRating ? item.averageRating.toFixed(1) : "0"}</Text>
                     </View>
                 </View>
             </View>

@@ -152,7 +152,7 @@ export function UserHomeScreen({ userName, homeData, onCategoryPress, onVendorPr
               <View style={styles.vendorOverlay}>
                 <View style={styles.vRating}>
                     <Ionicons name="star" size={10} color={colors.white} />
-                    <Text style={styles.vRatingText}>{item.averageRating || "4.5"}</Text>
+                    <Text style={styles.vRatingText}>{item.averageRating ? item.averageRating.toFixed(1) : "0"}</Text>
                 </View>
                 <View style={styles.vendorDetails}>
                     <Text style={styles.vName} numberOfLines={1}>{item.businessName || item.name}</Text>
