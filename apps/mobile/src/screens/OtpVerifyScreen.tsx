@@ -4,6 +4,8 @@ import * as Haptics from 'expo-haptics';
 import { colors } from "../theme/colors";
 import { Button } from "../components/Button";
 
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 type Props = {
   phone: string;
   otp: string;
@@ -17,6 +19,7 @@ type Props = {
 
 export function OtpVerifyScreen({ phone, otp, setOtp, onVerify, onResend, onBack, loading, error }: Props) {
   const shakeAnimation = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (error) {
@@ -37,10 +40,10 @@ export function OtpVerifyScreen({ phone, otp, setOtp, onVerify, onResend, onBack
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
+      style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
     >
       <View style={styles.inner}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+        <TouchableOpacity style={[styles.backBtn, { top: 10 }]} onPress={onBack}>
           <Text style={styles.backText}>← Change Number</Text>
         </TouchableOpacity>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -37,11 +37,7 @@ export const APP_CATEGORIES = [
   { name: "Furniture Rental", icon: "grid" },
   { name: "Lighting & Fireworks", icon: "flash" },
   { name: "Water & Beverage Service", icon: "water" },
-  { name: "Other", icon: "apps" },
 ];
-
-const OFFERS = [];
-const FEATURED = [];
 
 type Props = {
   userName?: string;
@@ -59,34 +55,28 @@ export function UserHomeScreen({ userName, homeData, onCategoryPress, onVendorPr
   const banners = homeData?.banners || [];
   const featured = homeData?.featuredVendors || [];
 
-  useEffect(() => {
-      console.log("UserHomeScreen received homeData:", !!homeData, "Featured count:", featured.length);
-      // Clean up any old static references if they persist in state
-  }, [homeData, userName]);
-
   const renderHeader = () => (
     <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
-      <View>
-        <Text style={styles.greeting}>Hello, {userName || "Guest"} 👋</Text>
-        <TouchableOpacity style={styles.locationSelector}>
-          <Ionicons name="location" size={16} color={colors.primary} />
-          <Text style={styles.locationText}>Jaipur, Rajasthan</Text>
-          <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-        </TouchableOpacity>
+      <View style={styles.headerLeft}>
+        <Image source={require("../../assets/logo.png")} style={styles.miniLogo} resizeMode="contain" />
+        <View>
+            <Text style={styles.greeting}>Namaste,</Text>
+            <Text style={styles.userName}>{userName || "Subhdin Guest"}</Text>
+        </View>
       </View>
       <TouchableOpacity style={styles.notificationBtn}>
-        <Ionicons name="notifications-outline" size={24} color={colors.text} />
+        <Ionicons name="notifications-outline" size={22} color={colors.text} />
         <View style={styles.notifDot} />
       </TouchableOpacity>
     </View>
   );
 
   const renderSearchBar = () => (
-    <View style={styles.searchContainer}>
+    <View style={styles.searchSection}>
       <View style={styles.searchBar}>
         <Ionicons name="search" size={20} color={colors.textMuted} />
         <TextInput
-          placeholder="Search for photographers, venues..."
+          placeholder="What are you planning today?"
           placeholderTextColor={colors.textMuted}
           style={styles.searchInput}
           value={searchInput}
@@ -94,11 +84,8 @@ export function UserHomeScreen({ userName, homeData, onCategoryPress, onVendorPr
           onSubmitEditing={() => onSearchPress(searchInput)}
           returnKeyType="search"
         />
-        <TouchableOpacity
-            style={styles.filterBtn}
-            onPress={() => onSearchPress(searchInput)}
-        >
-          <Ionicons name="options-outline" size={20} color={colors.white} />
+        <TouchableOpacity style={styles.searchGo} onPress={() => onSearchPress(searchInput)}>
+            <Ionicons name="arrow-forward" size={18} color={colors.white} />
         </TouchableOpacity>
       </View>
     </View>
@@ -107,53 +94,48 @@ export function UserHomeScreen({ userName, homeData, onCategoryPress, onVendorPr
   const renderCategories = () => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Categories</Text>
+        <Text style={styles.sectionTitle}>Wedding Services</Text>
         <TouchableOpacity onPress={() => setShowAllCats(true)}>
-          <Text style={styles.seeAll}>See All</Text>
+          <Text style={styles.seeAll}>View All</Text>
         </TouchableOpacity>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScroll}>
-        {APP_CATEGORIES.slice(0, 8).map((item) => (
+        {APP_CATEGORIES.slice(0, 10).map((item) => (
           <TouchableOpacity key={item.name} style={styles.catItem} onPress={() => onCategoryPress(item.name)}>
             <View style={styles.catIconContainer}>
-              <Ionicons name={item.icon as any} size={28} color={colors.primary} />
+                <View style={styles.catIconInner}>
+                    <Ionicons name={item.icon as any} size={24} color={colors.primary} />
+                </View>
             </View>
-            <Text style={styles.catName} numberOfLines={1}>{item.name.split(" ")[0]}</Text>
+            <Text style={styles.catName} numberOfLines={2}>{item.name}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
     </View>
   );
 
-  const renderOffers = () => (
-    <ScrollView
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        style={styles.offerScroll}
-        contentContainerStyle={{ paddingHorizontal: 20 }}
-    >
-      {banners.map((offer: any) => (
-        <TouchableOpacity key={offer.id} style={[styles.offerCard]}>
-          <Image source={{ uri: offer.image }} style={styles.offerBg} />
-          <View style={styles.offerOverlay}>
-            <Text style={styles.offerTitle}>{offer.title}</Text>
-            <Text style={styles.offerSub}>{offer.subtitle || offer.sub}</Text>
-            <View style={styles.claimBtn}>
-                <Text style={styles.claimText}>Claim Now</Text>
-            </View>
+  const renderHeroSection = () => (
+      <View style={styles.heroSection}>
+          <Image
+            source={{ uri: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1200&q=80" }}
+            style={styles.heroImage}
+          />
+          <View style={styles.heroOverlay}>
+              <Text style={styles.heroSubtitle}>CELEBRATE WITH STYLE</Text>
+              <Text style={styles.heroTitle}>Your Perfect Wedding{'\n'}Starts Here</Text>
+              <TouchableOpacity style={styles.heroBtn} onPress={() => onSearchPress()}>
+                  <Text style={styles.heroBtnText}>Explore Vendors</Text>
+              </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+      </View>
   );
 
   const renderFeatured = () => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Featured Vendors</Text>
+        <Text style={styles.sectionTitle}>Curated for You</Text>
         <TouchableOpacity onPress={() => onSearchPress("")}>
-          <Text style={styles.seeAll}>See All</Text>
+          <Text style={styles.seeAll}>Explore More</Text>
         </TouchableOpacity>
       </View>
       <FlatList
@@ -163,22 +145,22 @@ export function UserHomeScreen({ userName, homeData, onCategoryPress, onVendorPr
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.featuredScroll}
         renderItem={({ item }) => {
-          const image = item.thumbnail || item.image || (item.businessImages?.[0]);
+          const image = item.thumbnail || (item.businessImages && item.businessImages[0]) || "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=800&q=80";
           return (
             <TouchableOpacity style={styles.vendorCard} onPress={() => onVendorPress(item)}>
               <Image source={{ uri: image }} style={styles.vendorImage} />
-              <View style={styles.ratingBadge}>
-                  <Ionicons name="star" size={12} color={colors.white} />
-                  <Text style={styles.ratingText}>{item.rating || "4.5"}</Text>
-              </View>
-              <View style={styles.vendorInfo}>
-                <Text style={styles.vendorName}>{item.businessName || item.name}</Text>
-                <View style={styles.vendorRow}>
-                  <Text style={styles.vendorCat}>{item.category}</Text>
-                  <View style={styles.dot} />
-                  <Text style={styles.vendorLoc}>{item.location || (item.area + ", " + item.city)}</Text>
+              <View style={styles.vendorOverlay}>
+                <View style={styles.vRating}>
+                    <Ionicons name="star" size={10} color={colors.white} />
+                    <Text style={styles.vRatingText}>{item.averageRating || "4.5"}</Text>
                 </View>
-                <Text style={styles.vendorPrice}>Starts from <Text style={{ color: colors.primary, fontWeight: "800" }}>{item.priceRange || item.price || "Contact for Price"}</Text></Text>
+                <View style={styles.vendorDetails}>
+                    <Text style={styles.vName} numberOfLines={1}>{item.businessName || item.name}</Text>
+                    <View style={styles.vRow}>
+                        <Ionicons name="location" size={12} color="rgba(255,255,255,0.8)" />
+                        <Text style={styles.vLoc}>{item.area}, {item.city}</Text>
+                    </View>
+                </View>
               </View>
             </TouchableOpacity>
           );
@@ -189,25 +171,25 @@ export function UserHomeScreen({ userName, homeData, onCategoryPress, onVendorPr
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]}>
+      <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
         {renderHeader()}
         {renderSearchBar()}
+        {renderHeroSection()}
         <View style={styles.content}>
-          {renderOffers()}
           {renderCategories()}
           {renderFeatured()}
           <View style={styles.spacer} />
         </View>
       </ScrollView>
 
-      {/* All Categories Modal */}
+      {/* Modern Categories Modal */}
       <Modal visible={showAllCats} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
                     <Text style={styles.modalTitle}>All Categories</Text>
-                    <TouchableOpacity onPress={() => setShowAllCats(false)}>
-                        <Ionicons name="close" size={26} color={colors.text} />
+                    <TouchableOpacity onPress={() => setShowAllCats(false)} style={styles.closeBtn}>
+                        <Ionicons name="close" size={24} color={colors.text} />
                     </TouchableOpacity>
                 </View>
                 <FlatList
@@ -224,7 +206,7 @@ export function UserHomeScreen({ userName, homeData, onCategoryPress, onVendorPr
                             }}
                         >
                             <View style={styles.modalCatIcon}>
-                                <Ionicons name={item.icon as any} size={30} color={colors.primary} />
+                                <Ionicons name={item.icon as any} size={28} color={colors.primary} />
                             </View>
                             <Text style={styles.modalCatName}>{item.name}</Text>
                         </TouchableOpacity>
@@ -238,157 +220,108 @@ export function UserHomeScreen({ userName, homeData, onCategoryPress, onVendorPr
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.white },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 24,
-    paddingBottom: 15,
-    backgroundColor: colors.background,
+    paddingBottom: 20,
+    backgroundColor: colors.white,
   },
-  greeting: { fontSize: 14, color: colors.textMuted, fontWeight: "600" },
-  locationSelector: { flexDirection: "row", alignItems: "center", marginTop: 4, gap: 4 },
-  locationText: { fontSize: 16, fontWeight: "800", color: colors.text },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  miniLogo: { width: 40, height: 40, borderRadius: 10 },
+  greeting: { fontSize: 13, color: colors.textMuted, fontWeight: "600", letterSpacing: 1 },
+  userName: { fontSize: 18, fontWeight: "900", color: colors.text, marginTop: -2 },
   notificationBtn: {
     width: 44,
     height: 44,
-    borderRadius: 14,
-    backgroundColor: colors.white,
+    borderRadius: 15,
+    backgroundColor: colors.surfaceDark,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   notifDot: {
     position: "absolute",
     top: 12,
-    right: 12,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    right: 13,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: colors.error,
     borderWidth: 1.5,
     borderColor: colors.white,
   },
-  searchContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: colors.background,
+  searchSection: {
+    paddingHorizontal: 24,
+    marginBottom: 25,
   },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.white,
-    borderRadius: 18,
+    backgroundColor: colors.surfaceDark,
+    borderRadius: 20,
     paddingHorizontal: 16,
-    height: 56,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    height: 60,
   },
   searchInput: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: "600", color: colors.text },
-  searchPlaceholder: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: "600", color: colors.textMuted },
-  filterBtn: {
-    backgroundColor: colors.primary,
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  content: { marginTop: 10 },
-  section: { marginTop: 25 },
+  searchGo: { backgroundColor: colors.primary, width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  heroSection: { paddingHorizontal: 24, height: 220, marginBottom: 30 },
+  heroImage: { width: '100%', height: '100%', borderRadius: 32 },
+  heroOverlay: { ...StyleSheet.absoluteFillObject, padding: 30, justifyContent: 'center', left: 24, right: 24 },
+  heroSubtitle: { color: colors.white, fontSize: 12, fontWeight: '800', letterSpacing: 2 },
+  heroTitle: { color: colors.white, fontSize: 28, fontWeight: '900', marginTop: 8, lineHeight: 34 },
+  heroBtn: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, alignSelf: 'flex-start', marginTop: 20 },
+  heroBtnText: { color: colors.white, fontWeight: '800', fontSize: 13 },
+  content: { flex: 1 },
+  section: { marginBottom: 35 },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 24,
-    marginBottom: 15,
+    marginBottom: 20,
   },
-  sectionTitle: { fontSize: 18, fontWeight: "900", color: colors.text, letterSpacing: -0.5 },
-  seeAll: { fontSize: 14, fontWeight: "700", color: colors.primary },
+  sectionTitle: { fontSize: 20, fontWeight: "900", color: colors.text },
+  seeAll: { fontSize: 13, fontWeight: "700", color: colors.primary },
   catScroll: { paddingHorizontal: 18 },
-  catItem: { alignItems: "center", marginRight: 20 },
+  catItem: { alignItems: "center", width: 85, marginRight: 10 },
   catIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: colors.white,
+    width: 68,
+    height: 68,
+    borderRadius: 22,
+    backgroundColor: colors.surfaceDark,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginBottom: 10,
   },
-  catName: { fontSize: 12, fontWeight: "700", color: colors.text },
-  offerScroll: { marginTop: 10 },
-  offerCard: {
-    width: width - 40,
-    height: 160,
-    borderRadius: 24,
-    marginRight: 15,
-    overflow: "hidden",
-    position: "relative"
-  },
-  offerBg: { width: '100%', height: '100%', position: 'absolute' },
-  offerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    padding: 24,
-    justifyContent: 'center'
-  },
-  offerTitle: { fontSize: 24, fontWeight: "900", color: colors.white },
-  offerSub: { fontSize: 14, fontWeight: "600", color: colors.white, opacity: 0.9, marginTop: 4 },
-  claimBtn: {
-    backgroundColor: colors.white,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-    marginTop: 15
-  },
-  claimText: { fontSize: 12, fontWeight: "800", color: colors.primary },
+  catIconInner: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
+  catName: { fontSize: 11, fontWeight: "700", color: colors.text, textAlign: 'center', lineHeight: 14 },
   featuredScroll: { paddingHorizontal: 20 },
   vendorCard: {
-    width: width * 0.7,
-    backgroundColor: colors.white,
-    borderRadius: 24,
+    width: width * 0.75,
+    height: 200,
+    borderRadius: 30,
     marginRight: 16,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: colors.border,
+    position: 'relative'
   },
-  vendorImage: { width: "100%", height: 150 },
-  ratingBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4
-  },
-  ratingText: { color: colors.white, fontSize: 12, fontWeight: "700" },
-  vendorInfo: { padding: 16 },
-  vendorName: { fontSize: 16, fontWeight: "800", color: colors.text },
-  vendorRow: { flexDirection: "row", alignItems: "center", marginTop: 4, gap: 6 },
-  vendorCat: { fontSize: 12, fontWeight: "600", color: colors.textMuted },
-  vendorLoc: { fontSize: 12, fontWeight: "600", color: colors.textMuted },
-  dot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: colors.textMuted },
-  vendorPrice: { fontSize: 13, fontWeight: "600", color: colors.textMuted, marginTop: 10 },
-  spacer: { height: 100 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: colors.white, borderTopLeftRadius: 32, borderTopRightRadius: 32, height: '85%', paddingBottom: 20 },
+  vendorImage: { width: "100%", height: "100%" },
+  vendorOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)', padding: 20, justifyContent: 'space-between' },
+  vRating: { alignSelf: 'flex-end', backgroundColor: 'rgba(255,255,255,0.25)', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  vRatingText: { color: colors.white, fontSize: 12, fontWeight: '800' },
+  vendorDetails: { gap: 4 },
+  vName: { color: colors.white, fontSize: 20, fontWeight: '900' },
+  vRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  vLoc: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600' },
+  spacer: { height: 120 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: colors.white, borderTopLeftRadius: 40, borderTopRightRadius: 40, height: '85%', paddingBottom: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, borderBottomWidth: 1, borderBottomColor: colors.border },
   modalTitle: { fontSize: 22, fontWeight: '900', color: colors.text },
+  closeBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceDark, alignItems: 'center', justifyContent: 'center' },
   modalList: { padding: 16 },
-  modalCatItem: { width: (width - 32) / 3, alignItems: 'center', marginBottom: 24, paddingHorizontal: 4 },
-  modalCatIcon: { width: 64, height: 64, borderRadius: 20, backgroundColor: colors.surfaceDark, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  modalCatName: { fontSize: 11, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  modalCatItem: { width: (width - 32) / 3, alignItems: 'center', marginBottom: 25 },
+  modalCatIcon: { width: 70, height: 70, borderRadius: 24, backgroundColor: colors.surfaceDark, alignItems: 'center', justifyContent: 'center', marginBottom: 10, borderWidth: 1, borderColor: colors.border },
+  modalCatName: { fontSize: 11, fontWeight: '700', color: colors.text, textAlign: 'center', paddingHorizontal: 5 },
 });

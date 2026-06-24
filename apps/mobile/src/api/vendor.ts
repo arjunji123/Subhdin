@@ -99,8 +99,11 @@ export const vendorApi = {
     }),
 
   // Customer Side APIs
-  getCustomerHome: (token: string, city: string) =>
-    apiRequest<any>(`/customer/home?city=${city}`, { token }),
+  getUserProfile: (token: string) =>
+    apiRequest<any>("/user/me", { token }),
+
+  updateUserProfile: (token: string, data: any) =>
+    apiRequest<any>("/user/me", { method: "PUT", token, body: data }),
 
   getVendors: (token: string, params: any = {}) => {
     const query = new URLSearchParams(params).toString();
@@ -117,6 +120,6 @@ export const vendorApi = {
     apiRequest("/vendor/reviews", {
       method: "POST",
       token,
-      body: { ...data, vendorId } // Vendor review endpoint usually needs vendorId in body if not in URL
+      body: { ...data, vendorId }
     }),
 };

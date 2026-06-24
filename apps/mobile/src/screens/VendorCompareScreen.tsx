@@ -25,7 +25,7 @@ export function VendorCompareScreen({ vendors, onBack }: Props) {
       <View style={styles.valuesContainer}>
         {vendors.map((v) => (
           <View key={v.id} style={styles.valueCell}>
-            <Text style={styles.valueText}>{v[field] || "N/A"}</Text>
+            <Text style={styles.valueText}>{v[field] || v.businessName || "N/A"}</Text>
           </View>
         ))}
       </View>
@@ -36,7 +36,7 @@ export function VendorCompareScreen({ vendors, onBack }: Props) {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="close" size={26} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Compare Vendors</Text>
         <View style={{ width: 40 }} />

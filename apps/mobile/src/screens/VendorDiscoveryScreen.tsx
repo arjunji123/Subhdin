@@ -10,6 +10,8 @@ import {
   Modal,
   ActivityIndicator,
   Animated,
+  Dimensions,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../theme/colors";
@@ -17,6 +19,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from 'expo-haptics';
 import { Button } from "../components/Button";
 import { vendorApi } from "../api";
+
+const { width } = Dimensions.get("window");
 
 type Props = {
   token: string;
@@ -43,12 +47,17 @@ export function VendorDiscoveryScreen({ token, category, initialQuery, onBack, o
     try {
       const params: any = {};
       if (category) params.category = category;
-      if (search) params.q = search;
+      if (search) params.search = search;
+
+      params.sortBy = "popularity";
+
       const data = await vendorApi.getVendors(token, params);
       setVendors(data);
+
+      fadeAnim.setValue(0);
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 500,
+        duration: 800,
         useNativeDriver: true,
       }).start();
     } catch (error) {
@@ -59,43 +68,46 @@ export function VendorDiscoveryScreen({ token, category, initialQuery, onBack, o
   };
 
   const handleVendorPress = (item: any) => {
-    Haptics.selectionAsync();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onVendorPress(item);
   };
 
   const renderVendorItem = ({ item, index }: { item: any, index: number }) => {
     const hasImages = item.businessImages && item.businessImages.length > 0;
-    const image = hasImages ? item.businessImages[0] : "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=800&q=80";
+    const image = hasImages ? item.businessImages[0] : "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=800&q=80";
 
     const translateY = fadeAnim.interpolate({
         inputRange: [0, 1],
-        outputRange: [50 * (index + 1), 0],
+        outputRange: [40 * (index % 5 + 1), 0],
     });
 
     return (
       <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY }] }}>
-          <TouchableOpacity style={styles.card} onPress={() => handleVendorPress(item)} activeOpacity={0.9}>
-            <Image source={{ uri: image }} style={styles.image} />
-            {!hasImages && (
-                <View style={styles.noImageOverlay}>
-                    <Ionicons name="image-outline" size={24} color={colors.white} />
+          <TouchableOpacity style={styles.card} onPress={() => handleVendorPress(item)} activeOpacity={0.98}>
+            <View style={styles.imageBox}>
+                <Image source={{ uri: image }} style={styles.image} />
+                <View style={styles.cardOverlay}>
+                    <View style={styles.priceTag}>
+                        <Text style={styles.priceText}>From ₹{item.minPrice || item.price || "--"}</Text>
+                    </View>
+                    <View style={styles.ratingPill}>
+                        <Ionicons name="star" size={10} color={colors.white} />
+                        <Text style={styles.ratingText}>{item.averageRating || "4.5"}</Text>
+                    </View>
                 </View>
-            )}
-            <View style={styles.content}>
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{item.businessName}</Text>
-                  <Text style={styles.categoryText}>{item.area || item.city}</Text>
+            </View>
+            <View style={styles.cardInfo}>
+                <Text style={styles.vTitle}>{item.businessName || item.name}</Text>
+                <View style={styles.vMeta}>
+                    <View style={styles.metaItem}>
+                        <Ionicons name="location-sharp" size={14} color={colors.primary} />
+                        <Text style={styles.metaText} numberOfLines={1}>{item.area}, {item.city}</Text>
+                    </View>
+                    <View style={styles.metaItem}>
+                        <Ionicons name="ribbon" size={14} color={colors.success} />
+                        <Text style={[styles.metaText, { color: colors.success }]}>Verified</Text>
+                    </View>
                 </View>
-                <View style={styles.ratingRowSmall}>
-                   <Ionicons name="star" size={12} color={colors.primary} />
-                   <Text style={styles.ratingTextSmall}>4.5</Text>
-                </View>
-              </View>
-              <View style={styles.locationRow}>
-                <Ionicons name="location-outline" size={14} color={colors.textMuted} />
-                <Text style={styles.locationText}>{item.area}, {item.city}</Text>
-              </View>
             </View>
           </TouchableOpacity>
       </Animated.View>
@@ -105,33 +117,34 @@ export function VendorDiscoveryScreen({ token, category, initialQuery, onBack, o
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        <TouchableOpacity onPress={onBack} style={styles.backPill}>
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>{category || "Find Vendors"}</Text>
-        <TouchableOpacity style={styles.compareBtn}>
-           <Ionicons name="git-compare-outline" size={22} color={colors.primary} />
+        <Text style={styles.title}>{category || (search ? `Searching "${search}"` : "Subhdin Vendors")}</Text>
+        <TouchableOpacity style={styles.filterPill} onPress={() => setShowFilters(true)}>
+           <Ionicons name="options" size={22} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.searchSection}>
-        <View style={styles.searchBar}>
+        <View style={styles.searchBox}>
           <Ionicons name="search" size={20} color={colors.textMuted} />
           <TextInput
-            placeholder="Search by name or area..."
+            placeholder="Search venue, artist, area..."
+            placeholderTextColor={colors.textMuted}
             style={styles.input}
             value={search}
             onChangeText={setSearch}
+            onSubmitEditing={fetchVendors}
+            returnKeyType="search"
           />
         </View>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilters(true)}>
-          <Ionicons name="options-outline" size={22} color={colors.white} />
-        </TouchableOpacity>
       </View>
 
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Curating the best for you...</Text>
         </View>
       ) : (
         <FlatList
@@ -142,44 +155,39 @@ export function VendorDiscoveryScreen({ token, category, initialQuery, onBack, o
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>No vendors found</Text>
+              <Ionicons name="search" size={60} color={colors.border} />
+              <Text style={styles.emptyText}>No vendors found. Try a different search.</Text>
             </View>
           }
         />
       )}
 
+      {/* Modern Filter Modal */}
       <Modal visible={showFilters} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Filters</Text>
-                <TouchableOpacity onPress={() => setShowFilters(false)}>
+                <Text style={styles.modalTitle}>Refine Your Search</Text>
+                <TouchableOpacity onPress={() => setShowFilters(false)} style={styles.modalClose}>
                     <Ionicons name="close" size={24} color={colors.text} />
                 </TouchableOpacity>
              </View>
-             <View style={styles.filterGroup}>
-                <Text style={styles.filterLabel}>Sort By</Text>
-                <View style={styles.chipRow}>
-                    {["Popularity", "Rating", "Price: Low to High", "Price: High to Low"].map(chip => (
-                        <TouchableOpacity key={chip} style={styles.chip}>
-                            <Text style={styles.chipText}>{chip}</Text>
-                        </TouchableOpacity>
-                    ))}
+
+             <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.filterGroup}>
+                    <Text style={styles.filterLabel}>Sort By</Text>
+                    <View style={styles.chipRow}>
+                        {["Popularity", "Rating", "Price: Low to High"].map(chip => (
+                            <TouchableOpacity key={chip} style={styles.chip}>
+                                <Text style={styles.chipText}>{chip}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
                 </View>
-             </View>
-             <View style={styles.filterGroup}>
-                <Text style={styles.filterLabel}>Budget</Text>
-                <View style={styles.chipRow}>
-                    {["Under ₹50k", "₹50k - ₹1L", "₹1L - ₹5L", "Above ₹5L"].map(chip => (
-                        <TouchableOpacity key={chip} style={styles.chip}>
-                            <Text style={styles.chipText}>{chip}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-             </View>
-             <View style={{ marginTop: 'auto', gap: 12 }}>
+             </ScrollView>
+
+             <View style={styles.modalFooter}>
                 <Button title="Apply Filters" onPress={() => setShowFilters(false)} />
-                <Button title="Reset" variant="outline" onPress={() => setShowFilters(false)} />
              </View>
           </View>
         </View>
@@ -189,40 +197,41 @@ export function VendorDiscoveryScreen({ token, category, initialQuery, onBack, o
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, height: 60 },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 20, fontWeight: "800", color: colors.text },
-  compareBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  searchSection: { flexDirection: "row", paddingHorizontal: 20, gap: 12, marginBottom: 20 },
-  searchBar: { flex: 1, flexDirection: "row", alignItems: "center", backgroundColor: colors.white, borderRadius: 14, paddingHorizontal: 12, height: 50, borderWidth: 1, borderColor: colors.border },
-  input: { flex: 1, marginLeft: 10, fontSize: 14, fontWeight: "600" },
-  filterBtn: { width: 50, height: 50, backgroundColor: colors.primary, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-  list: { padding: 20, gap: 20 },
-  card: { backgroundColor: colors.white, borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
-  noImageOverlay: { position: 'absolute', top: 0, left: 0, right: 0, height: 200, backgroundColor: 'rgba(0,0,0,0.1)', alignItems: 'center', justifyContent: 'center' },
-  image: { width: "100%", height: 200 },
-  content: { padding: 16 },
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  ratingRowSmall: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primaryLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  ratingTextSmall: { fontSize: 12, fontWeight: '700', color: colors.primary },
-  name: { fontSize: 17, fontWeight: "800", color: colors.text },
-  categoryText: { fontSize: 12, color: colors.textMuted, fontWeight: "600", marginTop: 2 },
-  price: { fontSize: 16, fontWeight: "900", color: colors.primary },
-  locationRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10 },
-  locationText: { fontSize: 13, color: colors.textMuted, fontWeight: "600" },
-  capacityRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 },
-  capacityText: { fontSize: 13, color: colors.textMuted, fontWeight: "600" },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", marginTop: 100 },
-  emptyText: { fontSize: 16, color: colors.textMuted, fontWeight: "600" },
+  container: { flex: 1, backgroundColor: colors.white },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, height: 70 },
+  backPill: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.surfaceDark, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: 18, fontWeight: "900", color: colors.text, flex: 1, textAlign: 'center' },
+  filterPill: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center" },
+  searchSection: { paddingHorizontal: 20, marginBottom: 15 },
+  searchBox: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surfaceDark, borderRadius: 18, paddingHorizontal: 16, height: 56 },
+  input: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: "600", color: colors.text },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center", gap: 15 },
+  loadingText: { fontSize: 14, color: colors.textMuted, fontWeight: '600' },
+  list: { padding: 20, paddingBottom: 120 },
+  card: { backgroundColor: colors.white, borderRadius: 35, marginBottom: 25, overflow: "hidden", borderWidth: 1, borderColor: colors.border, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.05, shadowRadius: 15, elevation: 5 },
+  imageBox: { width: "100%", height: 230, position: 'relative' },
+  image: { width: "100%", height: "100%", resizeMode: 'cover' },
+  cardOverlay: { position: 'absolute', top: 15, left: 15, right: 15, flexDirection: 'row', justifyContent: 'space-between' },
+  priceTag: { backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  priceText: { color: colors.white, fontSize: 12, fontWeight: '800' },
+  ratingPill: { backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
+  ratingText: { color: colors.white, fontSize: 12, fontWeight: '800' },
+  cardInfo: { padding: 22 },
+  vTitle: { fontSize: 20, fontWeight: "900", color: colors.text },
+  vMeta: { flexDirection: 'row', gap: 15, marginTop: 12 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaText: { fontSize: 13, fontWeight: '700', color: colors.textMuted, maxWidth: 150 },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", marginTop: 100, gap: 15 },
+  emptyText: { fontSize: 15, color: colors.textMuted, fontWeight: "600", textAlign: 'center', paddingHorizontal: 50 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: colors.white, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, height: '70%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalContent: { backgroundColor: colors.white, borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: 24, height: '50%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
   modalTitle: { fontSize: 22, fontWeight: '900', color: colors.text },
-  filterGroup: { marginBottom: 24 },
-  filterLabel: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 12 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: colors.surfaceDark, borderWidth: 1, borderColor: colors.border },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.text },
+  modalClose: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceDark, alignItems: 'center', justifyContent: 'center' },
+  filterGroup: { marginBottom: 30 },
+  filterLabel: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 15 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  chip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.surfaceDark, borderWidth: 1, borderColor: colors.border },
+  chipText: { fontSize: 14, fontWeight: '700', color: colors.text },
+  modalFooter: { marginTop: 'auto', paddingTop: 20 },
 });

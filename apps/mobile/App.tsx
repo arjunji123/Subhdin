@@ -10,6 +10,7 @@ import {
   StatusBar as RNStatusBar,
   TouchableOpacity,
   Alert,
+  Animated,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from '@expo/vector-icons';
@@ -40,11 +41,11 @@ import { VendorCompareScreen } from "./src/screens/VendorCompareScreen";
 import { AddReviewScreen } from "./src/screens/AddReviewScreen";
 import { colors } from "./src/theme/colors";
 
-type Tab = "dashboard" | "services" | "offers" | "profile" | "user_home" | "user_search" | "user_bookings";
+type Tab = "dashboard" | "services" | "offers" | "profile" | "user_home" | "user_search" | "user_vendors";
 type ViewState =
   | "login" | "signup" | "otp_verify" | "main" | "service_form"
   | "reviews" | "edit_profile" | "grow_business" | "offer_form" | "help_support"
-  | "user_discovery" | "user_vendor_detail" | "user_compare" | "user_add_review";
+  | "user_discovery" | "user_vendor_detail" | "user_compare" | "user_add_review" | "celebration";
 
 const TOKEN_KEY = "@subhdin_token";
 const ROLE_KEY = "@subhdin_role";
@@ -89,62 +90,75 @@ function AppContent() {
     try {
       const savedToken = await AsyncStorage.getItem(TOKEN_KEY);
       const savedRole = await AsyncStorage.getItem(ROLE_KEY);
+      const savedProfile = await AsyncStorage.getItem("@subhdin_user_data");
+
       if (savedToken) {
-        setToken(savedToken);
         if (savedRole) setUserRole(savedRole as any);
-      } else {
-        setLoading(false);
+        if (savedProfile) setProfile(JSON.parse(savedProfile));
+        setToken(savedToken);
       }
     } catch (e) {
+    } finally {
       setLoading(false);
+      setAppReady(true);
     }
   }
 
   useEffect(() => {
-    if (isLoggedIn) {
+    if (isLoggedIn && appReady) {
       loadInitialData();
     }
-  }, [isLoggedIn, token]);
+  }, [isLoggedIn, appReady]);
 
   async function loadInitialData() {
+    if (!token) return;
     setLoading(true);
     try {
-      // Get role from state or storage
-      const currentRole = userRole || await AsyncStorage.getItem(ROLE_KEY) || 'user';
+      // Get role directly from storage to be 100% sure we have the latest
+      const currentRole = await AsyncStorage.getItem(ROLE_KEY) || userRole || 'user';
 
-      let prof;
+      console.log("Loading initial data for role:", currentRole);
+
       if (currentRole === 'vendor') {
-        prof = await vendorApi.getProfile(token);
+        const prof = await vendorApi.getProfile(token);
         setProfile(prof);
         await Promise.all([loadDashboard(), loadServices(), loadOffers()]);
       } else {
-        // Try to get customer profile if endpoint exists, otherwise fallback to session
+        // FOR USERS: Fetch real user profile data
         try {
-            await loadHomeData();
-
-            // If /vendor/me fails (401), we use the profile from login
-            const p = await vendorApi.getProfile(token).catch(() => null);
-            if (p) setProfile(p);
+            const prof = await vendorApi.getUserProfile(token);
+            setProfile(prof);
+            await AsyncStorage.setItem("@subhdin_user_data", JSON.stringify(prof));
         } catch (e) {
-            console.log("Profile fetch issues for user");
+            console.log("User profile fetch failed, using storage fallback");
+            const savedProfile = await AsyncStorage.getItem("@subhdin_user_data");
+            if (savedProfile) setProfile(JSON.parse(savedProfile));
         }
+
+        await loadFeaturedVendors();
       }
 
       setView("main");
       setTab(currentRole === "vendor" ? "dashboard" : "user_home");
-    } catch (err) {
-      // If profile fetch fails, logout
-      if (token) await handleLogout();
+    } catch (err: any) {
+      console.error("Initial load failed:", err);
+      // If it's a 401, we MUST logout to clear stale tokens
+      if (err.message?.includes("401") || err.status === 401) {
+        await handleLogout();
+      }
     } finally {
       setLoading(false);
     }
   }
 
-  async function loadHomeData() {
+  async function loadFeaturedVendors() {
     try {
-      const data = await vendorApi.getCustomerHome(token, "Jaipur");
-      setHomeData(data);
-    } catch (err) {}
+      console.log("Loading vendors for home screen...");
+      const data = await vendorApi.getVendors(token, { limit: 10 });
+      setHomeData({ featuredVendors: data, banners: [] });
+    } catch (err) {
+      console.error("Home vendors load failed:", err);
+    }
   }
 
   async function loadDashboard() {
@@ -199,11 +213,12 @@ function AppContent() {
       const role = authType === "signup" ? signupData.role : userRole;
       const data = await authApi.verifyOtp(phone, otp, role, authType === "signup" ? signupData : {});
 
-      // CRITICAL: Use the actual role from the backend response
+      // Use the actual role from the backend response
       const verifiedRole = data.user.role;
 
       await AsyncStorage.setItem(TOKEN_KEY, data.token);
       await AsyncStorage.setItem(ROLE_KEY, verifiedRole);
+      await AsyncStorage.setItem("@subhdin_user_data", JSON.stringify(data.user));
 
       setUserRole(verifiedRole);
       setProfile(data.user);
@@ -332,6 +347,23 @@ function AppContent() {
     } catch (err) {}
   }
 
+  async function handleReviewSubmit(rating: number, comment: string, userName: string) {
+    setLoading(true);
+    try {
+      await vendorApi.submitReview(token, selectedVendor.id, { rating, comment, userName });
+      setView("celebration");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Auto close celebration after 3s
+      setTimeout(() => {
+        setView("user_vendor_detail");
+      }, 3500);
+    } catch (error) {
+      Alert.alert("Error", "Failed to submit review");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
@@ -393,21 +425,22 @@ function AppContent() {
         {view === "user_add_review" && (
             <AddReviewScreen
                 vendorName={selectedVendor?.businessName}
+                userName={profile?.fullName || profile?.name || "Customer"}
                 onBack={() => setView("user_vendor_detail")}
-                onSubmit={async (r, c, u) => {
-                    setLoading(true);
-                    try {
-                      await vendorApi.submitReview(token, selectedVendor.id, { rating: r, comment: c, userName: u });
-                      Alert.alert("Success", "Review submitted successfully!");
-                      setView("user_vendor_detail");
-                    } catch (error) {
-                      Alert.alert("Error", "Failed to submit review");
-                    } finally {
-                      setLoading(false);
-                    }
-                }}
+                onSubmit={(r, c) => handleReviewSubmit(r, c, profile?.fullName || profile?.name || "Customer")}
                 loading={loading}
             />
+        )}
+
+        {view === "celebration" && (
+            <View style={styles.celebrationContainer}>
+                <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                <Animated.View style={styles.celebrationContent}>
+                    <Ionicons name="sparkles" size={80} color={colors.primary} />
+                    <Text style={styles.celebrationTitle}>Thank You!</Text>
+                    <Text style={styles.celebrationSub}>Your review helps the community grow.</Text>
+                </Animated.View>
+            </View>
         )}
 
         {view === "main" && (
@@ -459,10 +492,19 @@ function AppContent() {
                         }}
                     />
                  )}
-                 {(tab === "user_search" || tab === "user_bookings") && (
-                   <View style={styles.centered}>
-                     <Text style={styles.textMuted}>Coming Soon</Text>
-                   </View>
+                 {tab === "user_search" && (
+                     <VendorDiscoveryScreen
+                        token={token}
+                        onBack={() => setTab("user_home")}
+                        onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }}
+                    />
+                 )}
+                 {tab === "user_vendors" && (
+                     <VendorDiscoveryScreen
+                        token={token}
+                        onBack={() => setTab("user_home")}
+                        onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }}
+                    />
                  )}
                  {tab === "profile" && <ProfileScreen profile={profile} onUpdate={() => setView("edit_profile")} onLogout={handleLogout} onHelp={() => setView("help_support")} onDeleteAccount={handleLogout} loading={loading} />}
               </View>
@@ -485,9 +527,9 @@ function AppContent() {
                   </>
                 ) : (
                   <>
-                    <NavButton active={tab === "user_home"} icon="home" label="Discover" onPress={() => setTab("user_home")} />
+                    <NavButton active={tab === "user_home"} icon="home" label="Explore" onPress={() => setTab("user_home")} />
                     <NavButton active={tab === "user_search"} icon="search" label="Search" onPress={() => setTab("user_search")} />
-                    <NavButton active={tab === "user_bookings"} icon="calendar" label="Bookings" onPress={() => setTab("user_bookings")} />
+                    <NavButton active={tab === "user_vendors"} icon="people" label="Vendors" onPress={() => setTab("user_vendors")} />
                     <NavButton active={tab === "profile"} icon="person" label="Profile" onPress={() => setTab("profile")} />
                   </>
                 )}
@@ -549,4 +591,8 @@ const styles = StyleSheet.create({
   navLabel: { fontSize: 10, color: colors.textMuted, marginTop: 5, fontWeight: "600" },
   navLabelActive: { color: colors.primary, fontWeight: "800" },
   textMuted: { color: colors.textMuted, fontSize: 16, fontWeight: "600" },
+  celebrationContainer: { ...StyleSheet.absoluteFillObject, zIndex: 999, alignItems: 'center', justifyContent: 'center' },
+  celebrationContent: { alignItems: 'center', gap: 10 },
+  celebrationTitle: { fontSize: 32, fontWeight: '900', color: colors.primary, marginTop: 10 },
+  celebrationSub: { fontSize: 16, color: colors.white, textAlign: 'center', paddingHorizontal: 40, fontWeight: '600' },
 });

@@ -7,84 +7,104 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../theme/colors";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from 'expo-haptics';
 import { Button } from "../components/Button";
 
 type Props = {
   vendorName: string;
+  userName: string;
   onBack: () => void;
-  onSubmit: (rating: number, comment: string, userName: string) => void;
+  onSubmit: (rating: number, comment: string) => void;
   loading: boolean;
 };
 
-export function AddReviewScreen({ vendorName, onBack, onSubmit, loading }: Props) {
+export function AddReviewScreen({ vendorName, userName, onBack, onSubmit, loading }: Props) {
   const insets = useSafeAreaInsets();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
-  const [userName, setUserName] = useState("");
 
-  const isInvalid = rating === 0 || !comment.trim() || !userName.trim();
+  const isInvalid = rating === 0 || !comment.trim();
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.container, { paddingTop: insets.top }]}
+      style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
     >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false} bounces={false}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-            <Ionicons name="close" size={26} color={colors.text} />
+            <Ionicons name="close" size={28} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Write a Review</Text>
-          <View style={{ width: 40 }} />
+          <Text style={styles.title}>Submit Review</Text>
+          <View style={{ width: 44 }} />
         </View>
 
         <View style={styles.content}>
-          <Text style={styles.vendorName}>How was your experience with {vendorName}?</Text>
-
-          <View style={styles.starContainer}>
-            {[1, 2, 3, 4, 5].map((s) => (
-              <TouchableOpacity key={s} onPress={() => setRating(s)}>
-                <Ionicons
-                  name={s <= rating ? "star" : "star-outline"}
-                  size={40}
-                  color={s <= rating ? colors.primary : colors.textMuted}
-                />
-              </TouchableOpacity>
-            ))}
+          <View style={styles.vendorBox}>
+              <Text style={styles.vendorLabel}>Vibe check for</Text>
+              <Text style={styles.vendorName}>{vendorName}</Text>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Your Name (Required)</Text>
-            <TextInput
-              style={styles.nameInput}
-              placeholder="Enter your name"
-              value={userName}
-              onChangeText={setUserName}
-            />
+          <View style={styles.starWrapper}>
+            <View style={styles.starContainer}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                <TouchableOpacity key={s} onPress={() => {
+                    try {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    } catch(e) {}
+                    setRating(s);
+                    }}>
+                    <Ionicons
+                    name={s <= rating ? "star" : "star-outline"}
+                    size={44}
+                    color={s <= rating ? colors.primary : colors.border}
+                    />
+                </TouchableOpacity>
+                ))}
+            </View>
+            <Text style={styles.ratingText}>
+                {rating === 1 ? "Disappointing" :
+                 rating === 2 ? "Could be better" :
+                 rating === 3 ? "It was okay" :
+                 rating === 4 ? "Loved it!" :
+                 rating === 5 ? "Absolutely Perfect!" : "Tap to rate"}
+            </Text>
+          </View>
 
-            <Text style={styles.label}>Your Review</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Share details of your experience to help others..."
-              multiline
-              numberOfLines={6}
-              textAlignVertical="top"
-              value={comment}
-              onChangeText={setComment}
-            />
+          <View style={styles.inputStack}>
+            <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Reviewing as <Text style={{ color: colors.primary }}>{userName}</Text></Text>
+                <Text style={styles.hintText}>Your name will be visible on the platform.</Text>
+            </View>
+
+            <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Detailed Experience</Text>
+                <TextInput
+                style={styles.commentInput}
+                placeholder="Share the magic moments or areas to improve..."
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={6}
+                textAlignVertical="top"
+                value={comment}
+                onChangeText={setComment}
+                />
+            </View>
           </View>
 
           <View style={styles.footer}>
             <Button
-              title="Submit Review"
-              onPress={() => onSubmit(rating, comment, userName)}
+              title="Post Review"
+              onPress={() => onSubmit(rating, comment)}
               disabled={isInvalid}
               loading={loading}
             />
+            <Text style={styles.guarantee}>Verified reviews help Subhdin stay trustworthy.</Text>
           </View>
         </View>
       </ScrollView>
@@ -94,33 +114,36 @@ export function AddReviewScreen({ vendorName, onBack, onSubmit, loading }: Props
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, height: 60 },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 18, fontWeight: "900", color: colors.text },
-  content: { flex: 1, padding: 24, alignItems: "center" },
-  vendorName: { fontSize: 20, fontWeight: "800", color: colors.text, textAlign: "center", marginBottom: 30 },
-  starContainer: { flexDirection: "row", gap: 10, marginBottom: 40 },
-  inputContainer: { width: "100%", flex: 1 },
-  label: { fontSize: 14, fontWeight: "700", color: colors.text, marginBottom: 8, marginLeft: 4 },
-  input: {
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, height: 80 },
+  backBtn: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.surfaceDark, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: 20, fontWeight: "900", color: colors.text, letterSpacing: -0.5 },
+  content: { flex: 1, padding: 24 },
+  vendorBox: { marginBottom: 40, alignItems: 'center' },
+  vendorLabel: { fontSize: 13, color: colors.textMuted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5 },
+  vendorName: { fontSize: 26, fontWeight: "900", color: colors.text, marginTop: 8, textAlign: "center" },
+  starWrapper: { alignItems: 'center', marginBottom: 50 },
+  starContainer: { flexDirection: "row", gap: 12 },
+  ratingText: { fontSize: 15, fontWeight: '800', color: colors.primary, marginTop: 15 },
+  inputStack: { gap: 30, marginBottom: 40 },
+  field: { gap: 10 },
+  fieldLabel: { fontSize: 14, fontWeight: "800", color: colors.text, marginLeft: 4 },
+  nameInput: {
     backgroundColor: colors.surfaceDark,
     borderRadius: 20,
+    padding: 18,
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '600'
+  },
+  commentInput: {
+    backgroundColor: colors.surfaceDark,
+    borderRadius: 24,
     padding: 20,
     fontSize: 16,
     color: colors.text,
-    minHeight: 150,
-    borderWidth: 1,
-    borderColor: colors.border,
+    minHeight: 180,
+    fontWeight: '600'
   },
-  nameInput: {
-    backgroundColor: colors.surfaceDark,
-    borderRadius: 12,
-    padding: 15,
-    fontSize: 16,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 20,
-  },
-  footer: { width: "100%", paddingVertical: 20 },
+  footer: { width: "100%", paddingVertical: 20, gap: 15 },
+  guarantee: { fontSize: 11, color: colors.textMuted, textAlign: 'center', fontWeight: '600' },
 });
