@@ -384,6 +384,7 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
 
               <FlatList
                   data={viewerImages}
+                  key={`viewer-${viewerImages.length}`}
                   horizontal
                   pagingEnabled
                   initialScrollIndex={viewerIndex}
@@ -437,7 +438,7 @@ function ServiceCard({ service, onOpen, onImagePress }: any) {
                     </View>
                 </View>
             )}
-            <TouchableOpacity style={styles.offeringBody} onPress={onOpen} activeOpacity={0.9}>
+            <TouchableOpacity style={styles.offeringBody} activeOpacity={0.9} onPress={onOpen}>
                 <View style={styles.rowBetween}>
                     <Text style={styles.offeringName}>{service.serviceName}</Text>
                     <Text style={styles.offeringPrice}>₹{service.price}</Text>
