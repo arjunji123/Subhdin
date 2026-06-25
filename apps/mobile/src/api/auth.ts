@@ -15,13 +15,16 @@ export const authApi = {
     }),
 
   // Verifies OTP and optionally creates/updates profile
-  verifyOtp: (phone: string, otp: string, role: 'user' | 'vendor', profileData: any = {}) => {
-    const body = {
+  verifyOtp: (phone: string, otp: string, role?: 'user' | 'vendor', profileData: any = {}) => {
+    const body: any = {
       phone: formatPhone(phone),
       code: otp,
-      role,
       ...profileData,
     };
+
+    if (role) {
+      body.role = role;
+    }
 
     // Ensure mobileNumber in profileData is also formatted if present
     if (body.mobileNumber) {

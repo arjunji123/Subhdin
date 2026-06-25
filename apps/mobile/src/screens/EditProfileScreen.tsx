@@ -14,21 +14,31 @@ type Props = {
 
 export function EditProfileScreen({ profile, onSave, onBack, loading }: Props) {
   const insets = useSafeAreaInsets();
+  const isVendor = profile?.role === 'vendor' || !!profile?.businessName;
+
   const [form, setForm] = useState({
+    // Vendor Fields
     businessName: profile?.businessName || "",
     ownerName: profile?.ownerName || "",
+    address: profile?.address || "",
+    // User Fields
+    fullName: profile?.fullName || profile?.name || "",
+    // Common Fields
     email: profile?.email || "",
     city: profile?.city || "",
     area: profile?.area || "",
-    address: profile?.address || "",
   });
 
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const validate = () => {
     const errors: Record<string, string> = {};
-    if (!form.businessName.trim()) errors.businessName = "Business name required";
-    if (!form.ownerName.trim()) errors.ownerName = "Owner name required";
+    if (isVendor) {
+      if (!form.businessName.trim()) errors.businessName = "Business name required";
+      if (!form.ownerName.trim()) errors.ownerName = "Owner name required";
+    } else {
+      if (!form.fullName.trim()) errors.fullName = "Full name required";
+    }
     if (!form.city.trim()) errors.city = "City required";
     if (!form.area.trim()) errors.area = "Area required";
     return errors;
@@ -39,6 +49,25 @@ export function EditProfileScreen({ profile, onSave, onBack, loading }: Props) {
 
   const handleBlur = (field: string) => {
     setTouched({ ...touched, [field]: true });
+  };
+
+  const handleSave = () => {
+    // Construct data based on role
+    const data: any = {
+      email: form.email,
+      city: form.city,
+      area: form.area,
+    };
+
+    if (isVendor) {
+      data.businessName = form.businessName;
+      data.ownerName = form.ownerName;
+      data.address = form.address;
+    } else {
+      data.fullName = form.fullName;
+    }
+
+    onSave(data);
   };
 
   return (
@@ -59,29 +88,43 @@ export function EditProfileScreen({ profile, onSave, onBack, loading }: Props) {
         </View>
 
         <View style={styles.formContainer}>
-          <InputField
-            label="Business Name"
-            placeholder="e.g. Royal Events"
-            value={form.businessName}
-            onChangeText={(v) => setForm({...form, businessName: v})}
-            onBlur={() => handleBlur("businessName")}
-            error={errors.businessName}
-            touched={touched.businessName}
-          />
+          {isVendor ? (
+            <>
+              <InputField
+                label="Business Name"
+                placeholder="e.g. Royal Events"
+                value={form.businessName}
+                onChangeText={(v) => setForm({...form, businessName: v})}
+                onBlur={() => handleBlur("businessName")}
+                error={errors.businessName}
+                touched={touched.businessName}
+              />
+
+              <InputField
+                label="Owner Name"
+                placeholder="Name of owner"
+                value={form.ownerName}
+                onChangeText={(v) => setForm({...form, ownerName: v})}
+                onBlur={() => handleBlur("ownerName")}
+                error={errors.ownerName}
+                touched={touched.ownerName}
+              />
+            </>
+          ) : (
+            <InputField
+              label="Full Name"
+              placeholder="Enter your name"
+              value={form.fullName}
+              onChangeText={(v) => setForm({...form, fullName: v})}
+              onBlur={() => handleBlur("fullName")}
+              error={errors.fullName}
+              touched={touched.fullName}
+            />
+          )}
 
           <InputField
-            label="Owner Name"
-            placeholder="Name of owner"
-            value={form.ownerName}
-            onChangeText={(v) => setForm({...form, ownerName: v})}
-            onBlur={() => handleBlur("ownerName")}
-            error={errors.ownerName}
-            touched={touched.ownerName}
-          />
-
-          <InputField
-            label="Email"
-            placeholder="contact@business.com"
+            label="Email Address"
+            placeholder="name@example.com"
             keyboardType="email-address"
             autoCapitalize="none"
             value={form.email}
@@ -114,20 +157,22 @@ export function EditProfileScreen({ profile, onSave, onBack, loading }: Props) {
             </View>
           </View>
 
-          <InputField
-            label="Full Address"
-            placeholder="Exact address..."
-            multiline
-            style={{ height: 100, textAlignVertical: 'top' }}
-            value={form.address}
-            onChangeText={(v) => setForm({...form, address: v})}
-          />
+          {isVendor && (
+            <InputField
+              label="Full Business Address"
+              placeholder="Exact location details..."
+              multiline
+              style={{ height: 100, textAlignVertical: 'top' }}
+              value={form.address}
+              onChangeText={(v) => setForm({...form, address: v})}
+            />
+          )}
 
           <View style={styles.bottomSpacer} />
 
           <Button
-            title="Save Profile"
-            onPress={() => onSave(form)}
+            title="Update Profile"
+            onPress={handleSave}
             loading={loading}
             disabled={!isValid}
           />

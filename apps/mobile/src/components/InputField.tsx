@@ -10,64 +10,63 @@ interface Props extends TextInputProps {
 
 export function InputField({ label, error, touched, style, ...rest }: Props) {
   const [isFocused, setIsFocused] = useState(false);
-
   const hasError = touched && !!error;
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, hasError && styles.labelError]}>{label}</Text>
-      <TextInput
-        style={[
-          styles.input,
+      <Text style={[styles.label, isFocused && { color: colors.primary }, hasError && styles.labelError]}>{label}</Text>
+      <View style={[
+          styles.inputWrap,
           isFocused && styles.inputFocused,
-          hasError && styles.inputError,
-          style
-        ]}
-        placeholderTextColor={colors.textMuted}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        {...rest}
-      />
+          hasError && styles.inputError
+      ]}>
+          <TextInput
+            style={[styles.input, style]}
+            placeholderTextColor="rgba(148, 163, 184, 0.5)"
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            {...rest}
+          />
+      </View>
       {hasError && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    gap: 8,
-    width: "100%",
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-    marginLeft: 4,
-  },
-  labelError: {
-    color: colors.error,
+  container: { width: "100%", gap: 10 },
+  label: { fontSize: 12, fontWeight: "800", color: colors.textMuted, marginLeft: 5, textTransform: 'uppercase', letterSpacing: 1 },
+  labelError: { color: colors.error },
+  inputWrap: {
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: 20,
+    height: 62,
+    justifyContent: 'center',
+    paddingHorizontal: 5,
   },
   input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 18,
+    paddingHorizontal: 15,
     fontSize: 16,
+    fontWeight: '600',
     color: colors.text,
   },
   inputFocused: {
     borderColor: colors.primary,
-    backgroundColor: colors.white,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 2,
   },
   inputError: {
     borderColor: colors.error,
-    backgroundColor: "#FFF5F5",
   },
   errorText: {
     color: colors.error,
     fontSize: 12,
-    fontWeight: "600",
-    marginLeft: 8,
+    fontWeight: "700",
+    marginLeft: 10,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -6,14 +6,18 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  TextInput,
   Dimensions,
   FlatList,
   Modal,
+  Animated,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../theme/colors";
 import { Ionicons } from "@expo/vector-icons";
+import { getVendorImage } from "../utils/vendor";
+import { SkeletonLoader } from "../components/Skeleton/SkeletonLoader";
+import { BlurView } from "expo-blur";
 
 const { width } = Dimensions.get("window");
 
@@ -39,164 +43,197 @@ export const APP_CATEGORIES = [
   { name: "Water & Beverage Service", icon: "water" },
 ];
 
+const HERO_BANNERS = [
+  {
+    id: 1,
+    title: "Perfect Venues for Your Big Day",
+    subtitle: "STUNNING SPACES",
+    image: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=1200&q=80",
+    category: "Banquet Hall",
+    btnText: "Explore Now"
+  },
+  {
+    id: 2,
+    title: "Capture Magic in Every Frame",
+    subtitle: "STORYTELLERS",
+    image: "https://images.unsplash.com/photo-1537633552985-df8429e8048b?auto=format&fit=crop&w=1200&q=80",
+    category: "Photography",
+    btnText: "View Experts"
+  }
+];
+
 type Props = {
   userName?: string;
   homeData?: any;
+  loading?: boolean;
   onCategoryPress: (category: string) => void;
   onVendorPress: (vendor: any) => void;
   onSearchPress: (query?: string) => void;
 };
 
-export function UserHomeScreen({ userName, homeData, onCategoryPress, onVendorPress, onSearchPress }: Props) {
+export function UserHomeScreen({ userName, homeData, loading, onCategoryPress, onVendorPress, onSearchPress }: Props) {
   const insets = useSafeAreaInsets();
   const [showAllCats, setShowAllCats] = useState(false);
-  const [searchInput, setSearchInput] = useState("");
+  const [activeBanner, setActiveBanner] = useState(0);
 
-  const banners = homeData?.banners || [];
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    if (!loading) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: 0, duration: 600, useNativeDriver: true })
+      ]).start();
+    }
+  }, [loading]);
+
   const featured = homeData?.featuredVendors || [];
+  const popular = homeData?.popularVendors || [];
+  const nearby = homeData?.nearbyVendors || [];
 
   const renderHeader = () => (
     <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
       <View style={styles.headerLeft}>
-        <Image source={require("../../assets/logo.png")} style={styles.miniLogo} resizeMode="contain" />
+        <View style={styles.logoCircle}>
+            <Image source={require("../../assets/logo.png")} style={styles.miniLogo} resizeMode="contain" />
+        </View>
         <View>
-            <Text style={styles.greeting}>Namaste,</Text>
-            <Text style={styles.userName}>{userName || "Subhdin Guest"}</Text>
+            <Text style={styles.greeting}>Welcome to Subhdin,</Text>
+            <Text style={styles.userName}>{userName || "Guest Expert"}</Text>
         </View>
       </View>
-      <TouchableOpacity style={styles.notificationBtn}>
-        <Ionicons name="notifications-outline" size={22} color={colors.text} />
-        <View style={styles.notifDot} />
+      <TouchableOpacity style={styles.searchPill} onPress={() => onSearchPress()}>
+          <Ionicons name="search" size={20} color={colors.primary} />
       </TouchableOpacity>
     </View>
   );
 
-  const renderSearchBar = () => (
-    <View style={styles.searchSection}>
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={20} color={colors.textMuted} />
-        <TextInput
-          placeholder="What are you planning today?"
-          placeholderTextColor={colors.textMuted}
-          style={styles.searchInput}
-          value={searchInput}
-          onChangeText={setSearchInput}
-          onSubmitEditing={() => onSearchPress(searchInput)}
-          returnKeyType="search"
-        />
-        <TouchableOpacity style={styles.searchGo} onPress={() => onSearchPress(searchInput)}>
-            <Ionicons name="arrow-forward" size={18} color={colors.white} />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  const renderCategories = () => (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Wedding Services</Text>
-        <TouchableOpacity onPress={() => setShowAllCats(true)}>
-          <Text style={styles.seeAll}>View All</Text>
-        </TouchableOpacity>
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScroll}>
-        {APP_CATEGORIES.slice(0, 10).map((item) => (
-          <TouchableOpacity key={item.name} style={styles.catItem} onPress={() => onCategoryPress(item.name)}>
-            <View style={styles.catIconContainer}>
-                <View style={styles.catIconInner}>
-                    <Ionicons name={item.icon as any} size={24} color={colors.primary} />
+  const renderHeroCarousel = () => (
+      <View style={styles.carouselWrapper}>
+          <FlatList
+            data={HERO_BANNERS}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) => {
+                const index = Math.round(e.nativeEvent.contentOffset.x / width);
+                setActiveBanner(index);
+            }}
+            renderItem={({ item }) => (
+                <View style={styles.heroSection}>
+                    <Image source={{ uri: item.image }} style={styles.heroImage} />
+                    <View style={styles.heroOverlay}>
+                        <Text style={styles.heroSubtitle}>{item.subtitle}</Text>
+                        <Text style={styles.heroTitle}>{item.title}</Text>
+                        <TouchableOpacity style={styles.heroBtn} onPress={() => onCategoryPress(item.category)}>
+                            <Text style={styles.heroBtnText}>{item.btnText}</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-            </View>
-            <Text style={styles.catName} numberOfLines={2}>{item.name}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
-
-  const renderHeroSection = () => (
-      <View style={styles.heroSection}>
-          <Image
-            source={{ uri: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1200&q=80" }}
-            style={styles.heroImage}
+            )}
           />
-          <View style={styles.heroOverlay}>
-              <Text style={styles.heroSubtitle}>CELEBRATE WITH STYLE</Text>
-              <Text style={styles.heroTitle}>Your Perfect Wedding{'\n'}Starts Here</Text>
-              <TouchableOpacity style={styles.heroBtn} onPress={() => onSearchPress()}>
-                  <Text style={styles.heroBtnText}>Explore Vendors</Text>
-              </TouchableOpacity>
+          <View style={styles.pagination}>
+              {HERO_BANNERS.map((_, i) => (
+                  <View key={i} style={[styles.pDot, activeBanner === i && styles.pActiveDot]} />
+              ))}
           </View>
       </View>
   );
 
-  const renderFeatured = () => (
+  const renderVendorList = (title: string, data: any[]) => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Curated for You</Text>
+        <Text style={styles.sectionTitle}>{title}</Text>
         <TouchableOpacity onPress={() => onSearchPress("")}>
-          <Text style={styles.seeAll}>Explore More</Text>
+          <Text style={styles.seeAll}>See All</Text>
         </TouchableOpacity>
       </View>
       <FlatList
-        data={featured}
+        data={data}
         horizontal
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
         contentContainerStyle={styles.featuredScroll}
-        renderItem={({ item }) => {
-          const image = item.thumbnail || (item.businessImages && item.businessImages[0]) || "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=800&q=80";
-          return (
-            <TouchableOpacity style={styles.vendorCard} onPress={() => onVendorPress(item)}>
-              <Image source={{ uri: image }} style={styles.vendorImage} />
-              <View style={styles.vendorOverlay}>
-                <View style={styles.vRating}>
-                    <Ionicons name="star" size={10} color={colors.white} />
-                    <Text style={styles.vRatingText}>{item.averageRating ? item.averageRating.toFixed(1) : "0"}</Text>
+        renderItem={({ item, index }) => (
+            <TouchableOpacity style={styles.vendorCard} onPress={() => onVendorPress(item)} activeOpacity={0.9}>
+              <Image source={{ uri: getVendorImage(item, index) }} style={styles.vendorImage} />
+              <View style={styles.cardInfoOverlay}>
+                <View style={styles.vRatingPill}>
+                    <Ionicons name="star" size={12} color={colors.white} />
+                    <Text style={styles.vRatingText}>
+                        {(Number(item.averageRating || item.avgRating || item.rating || 0)).toFixed(1)}
+                    </Text>
                 </View>
-                <View style={styles.vendorDetails}>
+                <View>
                     <Text style={styles.vName} numberOfLines={1}>{item.businessName || item.name}</Text>
-                    <View style={styles.vRow}>
-                        <Ionicons name="location" size={12} color="rgba(255,255,255,0.8)" />
-                        <Text style={styles.vLoc}>{item.area}, {item.city}</Text>
-                    </View>
+                    <Text style={styles.vLocText}>{item.area}, {item.city}</Text>
                 </View>
               </View>
             </TouchableOpacity>
-          );
-        }}
+        )}
       />
     </View>
   );
+
+  if (loading) {
+    return (
+        <View style={styles.container}>
+            {renderHeader()}
+            <View style={{ padding: 24 }}><SkeletonLoader height={230} borderRadius={30} /></View>
+            <View style={{ padding: 24 }}><SkeletonLoader height={40} width={150} /></View>
+        </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
         {renderHeader()}
-        {renderSearchBar()}
-        {renderHeroSection()}
-        <View style={styles.content}>
-          {renderCategories()}
-          {renderFeatured()}
-          <View style={styles.spacer} />
-        </View>
+
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+            {renderHeroCarousel()}
+
+            <View style={styles.catGrid}>
+                <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Event Services</Text>
+                    <TouchableOpacity onPress={() => setShowAllCats(true)}>
+                        <Ionicons name="apps" size={20} color={colors.primary} />
+                    </TouchableOpacity>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScroll}>
+                    {APP_CATEGORIES.slice(0, 10).map(cat => (
+                        <TouchableOpacity key={cat.name} style={styles.catItem} onPress={() => onCategoryPress(cat.name)}>
+                            <View style={styles.catIconBox}>
+                                <Ionicons name={cat.icon as any} size={24} color={colors.primary} />
+                            </View>
+                            <Text style={styles.catNameText}>{cat.name}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            </View>
+
+            {renderVendorList("Handpicked Experts", featured)}
+            {renderVendorList("Most Popular", popular)}
+            {nearby.length > 0 && renderVendorList("Around You", nearby)}
+
+            <View style={{ height: 120 }} />
+        </Animated.View>
       </ScrollView>
 
       {/* Modern Categories Modal */}
       <Modal visible={showAllCats} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>All Categories</Text>
-                    <TouchableOpacity onPress={() => setShowAllCats(false)} style={styles.closeBtn}>
-                        <Ionicons name="close" size={24} color={colors.text} />
-                    </TouchableOpacity>
-                </View>
-                <FlatList
+          <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                      <Text style={styles.modalTitle}>All Categories</Text>
+                      <TouchableOpacity onPress={() => setShowAllCats(false)}>
+                          <Ionicons name="close-circle" size={32} color={colors.textMuted} />
+                      </TouchableOpacity>
+                  </View>
+                  <FlatList
                     data={APP_CATEGORIES}
                     numColumns={3}
                     keyExtractor={item => item.name}
-                    contentContainerStyle={styles.modalList}
                     renderItem={({ item }) => (
                         <TouchableOpacity
                             style={styles.modalCatItem}
@@ -205,123 +242,65 @@ export function UserHomeScreen({ userName, homeData, onCategoryPress, onVendorPr
                                 onCategoryPress(item.name);
                             }}
                         >
-                            <View style={styles.modalCatIcon}>
+                            <View style={styles.catIconBox}>
                                 <Ionicons name={item.icon as any} size={28} color={colors.primary} />
                             </View>
                             <Text style={styles.modalCatName}>{item.name}</Text>
                         </TouchableOpacity>
                     )}
-                />
-            </View>
-        </View>
+                  />
+              </View>
+          </View>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.white },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingBottom: 20,
-    backgroundColor: colors.white,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  miniLogo: { width: 40, height: 40, borderRadius: 10 },
+  container: { flex: 1, backgroundColor: colors.background },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, paddingBottom: 25 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  logoCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5 },
+  miniLogo: { width: 30, height: 30 },
   greeting: { fontSize: 13, color: colors.textMuted, fontWeight: "600", letterSpacing: 1 },
-  userName: { fontSize: 18, fontWeight: "900", color: colors.text, marginTop: -2 },
-  notificationBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 15,
-    backgroundColor: colors.surfaceDark,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  notifDot: {
-    position: "absolute",
-    top: 12,
-    right: 13,
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: colors.error,
-    borderWidth: 1.5,
-    borderColor: colors.white,
-  },
-  searchSection: {
-    paddingHorizontal: 24,
-    marginBottom: 25,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surfaceDark,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    height: 60,
-  },
-  searchInput: { flex: 1, marginLeft: 12, fontSize: 15, fontWeight: "600", color: colors.text },
-  searchGo: { backgroundColor: colors.primary, width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  heroSection: { paddingHorizontal: 24, height: 220, marginBottom: 30 },
-  heroImage: { width: '100%', height: '100%', borderRadius: 32 },
-  heroOverlay: { ...StyleSheet.absoluteFillObject, padding: 30, justifyContent: 'center', left: 24, right: 24 },
-  heroSubtitle: { color: colors.white, fontSize: 12, fontWeight: '800', letterSpacing: 2 },
-  heroTitle: { color: colors.white, fontSize: 28, fontWeight: '900', marginTop: 8, lineHeight: 34 },
-  heroBtn: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, alignSelf: 'flex-start', marginTop: 20 },
-  heroBtnText: { color: colors.white, fontWeight: '800', fontSize: 13 },
-  content: { flex: 1 },
+  userName: { fontSize: 20, fontWeight: "900", color: colors.text, marginTop: -2 },
+  searchPill: { width: 48, height: 48, borderRadius: 16, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
+
+  carouselWrapper: { marginBottom: 35 },
+  heroSection: { width: width, paddingHorizontal: 24, height: 260 },
+  heroImage: { width: '100%', height: '100%', borderRadius: 35 },
+  heroOverlay: { position: 'absolute', bottom: 20, left: 44, right: 44, padding: 25, borderRadius: 25, backgroundColor: "rgba(255, 255, 255, 0.9)", borderWidth: 1, borderColor: "rgba(0,0,0,0.05)", shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10 },
+  heroSubtitle: { color: colors.primary, fontSize: 10, fontWeight: '800', letterSpacing: 2 },
+  heroTitle: { color: colors.text, fontSize: 24, fontWeight: '900', marginTop: 5 },
+  heroBtn: { backgroundColor: colors.primary, paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, alignSelf: 'flex-start', marginTop: 15 },
+  heroBtnText: { color: colors.white, fontWeight: '800', fontSize: 12 },
+  pagination: { flexDirection: 'row', gap: 6, position: 'absolute', bottom: -15, alignSelf: 'center' },
+  pDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.border },
+  pActiveDot: { width: 20, backgroundColor: colors.primary },
+
+  catGrid: { marginBottom: 35 },
+  catScroll: { paddingHorizontal: 20, gap: 18 },
+  catItem: { alignItems: 'center', width: 85 },
+  catIconBox: { width: 64, height: 64, borderRadius: 22, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, elevation: 2 },
+  catNameText: { fontSize: 11, fontWeight: '700', color: colors.text, marginTop: 10, textAlign: 'center' },
+
   section: { marginBottom: 35 },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    marginBottom: 20,
-  },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, marginBottom: 20 },
   sectionTitle: { fontSize: 20, fontWeight: "900", color: colors.text },
-  seeAll: { fontSize: 13, fontWeight: "700", color: colors.primary },
-  catScroll: { paddingHorizontal: 18 },
-  catItem: { alignItems: "center", width: 85, marginRight: 10 },
-  catIconContainer: {
-    width: 68,
-    height: 68,
-    borderRadius: 22,
-    backgroundColor: colors.surfaceDark,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 10,
-  },
-  catIconInner: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
-  catName: { fontSize: 11, fontWeight: "700", color: colors.text, textAlign: 'center', lineHeight: 14 },
-  featuredScroll: { paddingHorizontal: 20 },
-  vendorCard: {
-    width: width * 0.75,
-    height: 200,
-    borderRadius: 30,
-    marginRight: 16,
-    overflow: "hidden",
-    position: 'relative'
-  },
-  vendorImage: { width: "100%", height: "100%" },
-  vendorOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)', padding: 20, justifyContent: 'space-between' },
-  vRating: { alignSelf: 'flex-end', backgroundColor: 'rgba(255,255,255,0.25)', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  seeAll: { fontSize: 14, fontWeight: "700", color: colors.primary },
+  featuredScroll: { paddingHorizontal: 20, gap: 20 },
+  vendorCard: { width: width * 0.7, height: 240, borderRadius: 35, overflow: "hidden", position: 'relative', backgroundColor: colors.surface, elevation: 8, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 15 },
+  vendorImage: { width: "100%", height: "100%", resizeMode: 'cover' },
+  cardInfoOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: "rgba(255, 255, 255, 0.95)" },
+  vRatingPill: { position: 'absolute', top: -35, right: 20, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
   vRatingText: { color: colors.white, fontSize: 12, fontWeight: '800' },
-  vendorDetails: { gap: 4 },
-  vName: { color: colors.white, fontSize: 20, fontWeight: '900' },
-  vRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  vLoc: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600' },
-  spacer: { height: 120 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: colors.white, borderTopLeftRadius: 40, borderTopRightRadius: 40, height: '85%', paddingBottom: 20 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, borderBottomWidth: 1, borderBottomColor: colors.border },
-  modalTitle: { fontSize: 22, fontWeight: '900', color: colors.text },
-  closeBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceDark, alignItems: 'center', justifyContent: 'center' },
-  modalList: { padding: 16 },
-  modalCatItem: { width: (width - 32) / 3, alignItems: 'center', marginBottom: 25 },
-  modalCatIcon: { width: 70, height: 70, borderRadius: 24, backgroundColor: colors.surfaceDark, alignItems: 'center', justifyContent: 'center', marginBottom: 10, borderWidth: 1, borderColor: colors.border },
-  modalCatName: { fontSize: 11, fontWeight: '700', color: colors.text, textAlign: 'center', paddingHorizontal: 5 },
+  vName: { color: colors.text, fontSize: 18, fontWeight: '900' },
+  vLocText: { color: colors.textMuted, fontSize: 12, fontWeight: '600', marginTop: 2 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: colors.white, borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: 30, height: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
+  modalTitle: { fontSize: 24, fontWeight: '900', color: colors.text },
+  modalCatItem: { flex: 1, alignItems: 'center', marginBottom: 25 },
+  modalCatName: { fontSize: 12, fontWeight: '700', color: colors.text, marginTop: 10 }
 });

@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Tou
 import { colors } from "../theme/colors";
 import { Button } from "../components/Button";
 import { InputField } from "../components/InputField";
-
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
 type Role = 'user' | 'vendor';
 
@@ -18,12 +18,9 @@ export function RegisterProfileScreen({ onComplete, onBack, loading }: Props) {
   const insets = useSafeAreaInsets();
   const [role, setRole] = useState<Role>('user');
   const [form, setForm] = useState({
-    // Vendor Fields
     businessName: "",
     ownerName: "",
-    // User Fields
     fullName: "",
-    // Shared Fields
     mobileNumber: "",
     email: "",
     city: "",
@@ -35,24 +32,15 @@ export function RegisterProfileScreen({ onComplete, onBack, loading }: Props) {
 
   const validate = () => {
     const errors: Record<string, string> = {};
-
     if (role === 'vendor') {
       if (!form.businessName) errors.businessName = "Business name is required";
       if (!form.ownerName) errors.ownerName = "Owner name is required";
       if (!form.city) errors.city = "City is required";
       if (!form.area) errors.area = "Area is required";
-      if (!form.address) errors.address = "Full address is required";
     } else {
       if (!form.fullName) errors.fullName = "Full name is required";
     }
-
-    if (!form.mobileNumber) errors.mobileNumber = "Mobile is required";
-    else if (form.mobileNumber.length < 10) errors.mobileNumber = "Enter 10 digit number";
-
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      errors.email = "Enter a valid email address";
-    }
-
+    if (!form.mobileNumber || form.mobileNumber.length < 10) errors.mobileNumber = "Valid mobile required";
     return errors;
   };
 
@@ -66,68 +54,67 @@ export function RegisterProfileScreen({ onComplete, onBack, loading }: Props) {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+      style={styles.container}
     >
       <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 20 }]}
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
         <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <Text style={styles.backText}>← Back to Login</Text>
+            <Ionicons name="arrow-back" size={24} color={colors.primary} />
+            <Text style={styles.backText}>Login</Text>
         </TouchableOpacity>
 
         <View style={styles.header}>
           <Text style={styles.title}>Join Subhdin</Text>
           <Text style={styles.subtitle}>
-            {role === 'user' ? 'Find the best vendors for your special day' : 'Grow your business with India\'s finest wedding platform'}
+            {role === 'user' ? 'Find the best experts for your special day' : 'Grow your business with the elite community'}
           </Text>
         </View>
 
-        {/* Modern Role Switcher */}
-        <View style={styles.tabContainer}>
+        <View style={styles.rolePicker}>
           <TouchableOpacity
-            style={[styles.tab, role === 'user' && styles.activeTab]}
+            style={[styles.roleTab, role === 'user' && styles.activeRoleTab]}
             onPress={() => setRole('user')}
           >
-            <Text style={[styles.tabText, role === 'user' && styles.activeTabText]}>I'm a Customer</Text>
+            <Ionicons name="person" size={18} color={role === 'user' ? colors.white : colors.textMuted} />
+            <Text style={[styles.roleText, role === 'user' && styles.activeRoleText]}>Customer</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, role === 'vendor' && styles.activeTab]}
+            style={[styles.roleTab, role === 'vendor' && styles.activeRoleTab]}
             onPress={() => setRole('vendor')}
           >
-            <Text style={[styles.tabText, role === 'vendor' && styles.activeTabText]}>I'm a Vendor</Text>
+            <Ionicons name="business" size={18} color={role === 'vendor' ? colors.white : colors.textMuted} />
+            <Text style={[styles.roleText, role === 'vendor' && styles.activeRoleText]}>Partner</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.form}>
           {role === 'user' ? (
-            <>
-              <InputField
-                label="Full Name"
-                placeholder="Enter your name"
-                value={form.fullName}
-                onChangeText={(v) => setForm({...form, fullName: v})}
-                onBlur={() => handleBlur("fullName")}
-                error={errors.fullName}
-                touched={touched.fullName}
-              />
-            </>
+            <InputField
+              label="Full Name"
+              placeholder="Enter your name"
+              value={form.fullName}
+              onChangeText={(v) => setForm({...form, fullName: v})}
+              onBlur={() => handleBlur("fullName")}
+              error={errors.fullName}
+              touched={touched.fullName}
+            />
           ) : (
             <>
               <InputField
                 label="Business Name"
-                placeholder="e.g. Dream Weddings"
+                placeholder="e.g. Royal Events"
                 value={form.businessName}
                 onChangeText={(v) => setForm({...form, businessName: v})}
                 onBlur={() => handleBlur("businessName")}
                 error={errors.businessName}
                 touched={touched.businessName}
               />
-
               <InputField
                 label="Owner Name"
-                placeholder="Your full name"
+                placeholder="Manager/Owner name"
                 value={form.ownerName}
                 onChangeText={(v) => setForm({...form, ownerName: v})}
                 onBlur={() => handleBlur("ownerName")}
@@ -149,145 +136,56 @@ export function RegisterProfileScreen({ onComplete, onBack, loading }: Props) {
             touched={touched.mobileNumber}
           />
 
-          <InputField
-            label="Email (Optional)"
-            placeholder="hello@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={form.email}
-            onChangeText={(v) => setForm({...form, email: v})}
-            onBlur={() => handleBlur("email")}
-            error={errors.email}
-            touched={touched.email}
-          />
-
           {role === 'vendor' && (
-            <>
               <View style={styles.row}>
-                <View style={styles.flex}>
+                <View style={{ flex: 1 }}>
                   <InputField
                     label="City"
-                    placeholder="Mumbai"
+                    placeholder="City"
                     value={form.city}
                     onChangeText={(v) => setForm({...form, city: v})}
-                    onBlur={() => handleBlur("city")}
-                    error={errors.city}
-                    touched={touched.city}
                   />
                 </View>
                 <View style={{ width: 16 }} />
-                <View style={styles.flex}>
+                <View style={{ flex: 1 }}>
                   <InputField
                     label="Area"
-                    placeholder="Andheri"
+                    placeholder="Area"
                     value={form.area}
                     onChangeText={(v) => setForm({...form, area: v})}
-                    onBlur={() => handleBlur("area")}
-                    error={errors.area}
-                    touched={touched.area}
                   />
                 </View>
               </View>
-
-              <InputField
-                label="Full Address"
-                placeholder="Shop no, Street..."
-                multiline
-                style={{ height: 100, textAlignVertical: "top" }}
-                value={form.address}
-                onChangeText={(v) => setForm({...form, address: v})}
-                onBlur={() => handleBlur("address")}
-                error={errors.address}
-                touched={touched.address}
-              />
-            </>
           )}
 
-          <View style={styles.spacer} />
+          <View style={{ height: 20 }} />
 
           <Button
-            title={role === 'user' ? "Create User Account" : "Create Vendor Account"}
+            title="Create Account"
             onPress={() => onComplete(form, role)}
             loading={loading}
             disabled={!isValid}
           />
         </View>
+        <View style={{ height: 60 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
-  flex: {
-    flex: 1,
-  },
-  content: {
-    padding: 24,
-    paddingTop: 10,
-    paddingBottom: 40,
-  },
-  backBtn: {
-    marginBottom: 20,
-  },
-  backText: {
-    color: colors.primary,
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  header: {
-    marginBottom: 32,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.textMuted,
-    marginTop: 8,
-  },
-  form: {
-    gap: 20,
-  },
-  row: {
-    flexDirection: "row",
-  },
-  spacer: {
-    height: 12,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: colors.surfaceDark,
-    padding: 6,
-    borderRadius: 16,
-    marginBottom: 32,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 12,
-  },
-  activeTab: {
-    backgroundColor: colors.white,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  activeTabText: {
-    color: colors.primary,
-    fontWeight: '700',
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: 24 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 30 },
+  backText: { color: colors.primary, fontWeight: "800", fontSize: 16 },
+  header: { marginBottom: 35 },
+  title: { fontSize: 36, fontWeight: "900", color: colors.text, letterSpacing: -1 },
+  subtitle: { fontSize: 16, color: colors.textMuted, marginTop: 8, fontWeight: "600", lineHeight: 22 },
+  rolePicker: { flexDirection: 'row', backgroundColor: colors.surface, padding: 6, borderRadius: 20, marginBottom: 35, borderWidth: 1, borderColor: colors.border },
+  roleTab: { flex: 1, flexDirection: 'row', paddingVertical: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 16, gap: 8 },
+  activeRoleTab: { backgroundColor: colors.primary, elevation: 5, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
+  roleText: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
+  activeRoleText: { color: colors.white },
+  form: { gap: 20 },
+  row: { flexDirection: "row" }
 });

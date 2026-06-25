@@ -1,74 +1,65 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, Dimensions } from "react-native";
 import { colors } from "../theme/colors";
 import { Ionicons } from '@expo/vector-icons';
+
+const { width } = Dimensions.get("window");
 
 type Props = {
   label: string;
   value: number | string;
+  icon?: any;
 };
 
-const iconMap: Record<string, any> = {
-    'Leads': 'people',
-    'Views': 'eye',
-    'WhatsApp': 'logo-whatsapp',
-    'Contacts': 'call'
-};
-
-export function StatCard({ label, value }: Props) {
+export function StatCard({ label, value, icon }: Props) {
   return (
     <View style={styles.card}>
-      <View style={styles.header}>
-        <View style={styles.iconBox}>
-            <Ionicons name={iconMap[label] || 'stats-chart'} size={14} color={colors.primary} />
-        </View>
-        <Text style={styles.label}>{label}</Text>
+      <View style={styles.iconContainer}>
+          <Ionicons name={icon || 'stats-chart'} size={24} color={colors.primary} />
       </View>
-      <Text style={styles.value}>{value}</Text>
+      <View>
+          <Text style={styles.value}>{value}</Text>
+          <Text style={styles.label} numberOfLines={1}>{label}</Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.white,
-    borderRadius: 24,
-    padding: 18,
+    backgroundColor: colors.surface,
+    borderRadius: 28,
+    padding: 20,
     borderWidth: 1,
     borderColor: colors.border,
-    width: "48%",
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 3,
+    width: (width - 48 - 15) / 2, // 2 columns with 15 gap, 48 is total horizontal padding
+    gap: 15,
+    elevation: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  iconBox: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    backgroundColor: colors.primaryLight,
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   value: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "900",
     color: colors.text,
     letterSpacing: -1,
   },
   label: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textMuted,
-    fontWeight: "700",
+    fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 1,
+    marginTop: 2,
   },
 });

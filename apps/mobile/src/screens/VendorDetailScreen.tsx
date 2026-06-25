@@ -22,9 +22,10 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { Button } from "../components/Button";
 import { vendorApi } from "../api";
+import { getVendorImage } from "../utils/vendor";
 
 const { width } = Dimensions.get("window");
-const HEADER_HEIGHT = 400;
+const HEADER_HEIGHT = 380;
 
 type Props = {
   token: string;
@@ -39,25 +40,31 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
   const insets = useSafeAreaInsets();
   const [data, setData] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
+  const [offers, setOffers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRevealed, setIsRevealed] = useState(false);
   const [selectedService, setSelectedService] = useState<any>(null);
+  const [activeModalImg, setActiveModalImg] = useState(0);
+  const [viewerImages, setViewerImages] = useState<string[]>([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [isViewerVisible, setIsViewerVisible] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const revealScale = useRef(new Animated.Value(0)).current;
 
-  // Use a ref for the function to avoid hoisting issues or re-definition errors
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [vData, sData] = await Promise.all([
+      const [vData, sData, oData] = await Promise.all([
         vendorApi.getVendorDetail(token, vendorId),
-        vendorApi.getVendorServices(token, vendorId)
+        vendorApi.getVendorServices(token, vendorId),
+        vendorApi.getVendorOffers(token, vendorId)
       ]);
       setData(vData);
       setServices(sData || []);
+      setOffers(oData || []);
     } catch (error) {
-      console.error("Fetch vendor detail failed:", error);
+      console.error("Fetch failed:", error);
     } finally {
       setLoading(false);
     }
@@ -70,17 +77,16 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
     }
   }, [vendorId]);
 
+  const handleOpenViewer = (images: string[], index: number) => {
+    setViewerImages(images);
+    setViewerIndex(index);
+    setIsViewerVisible(true);
+  };
+
   const handleReveal = () => {
-    try {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch(e) {}
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
     setIsRevealed(true);
-    Animated.spring(revealScale, {
-        toValue: 1,
-        useNativeDriver: true,
-        friction: 8,
-        tension: 40,
-    }).start();
+    Animated.spring(revealScale, { toValue: 1, useNativeDriver: true, friction: 8, tension: 40 }).start();
     onTrackAction('CONTACT_REVEAL');
   };
 
@@ -88,7 +94,7 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
     const v = data?.vendor;
     if (!v) return;
     onTrackAction('WHATSAPP_CLICK');
-    const message = `Hi ${v.businessName}, I found your service on Subhdin and I am interested.`;
+    const message = `Hi ${v.businessName}, I found you on Subhdin and I am interested in your services.`;
     Linking.openURL(`whatsapp://send?phone=${v.mobileNumber || v.phone}&text=${encodeURIComponent(message)}`);
   };
 
@@ -96,13 +102,6 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
     const v = data?.vendor;
     if (!v) return;
     Linking.openURL(`tel:${v.mobileNumber || v.phone}`);
-  };
-
-  const getSocialIcon = (url: string) => {
-    if (url.includes('youtube.com') || url.includes('youtu.be')) return 'logo-youtube';
-    if (url.includes('instagram.com')) return 'logo-instagram';
-    if (url.includes('facebook.com')) return 'logo-facebook';
-    return 'link-outline';
   };
 
   if (loading) {
@@ -115,7 +114,7 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
 
   const vendor = data?.vendor;
   const reviews = data?.reviews || [];
-  const image = vendor?.businessImages?.[0] || "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=800&q=80";
+  const image = getVendorImage(vendor);
 
   const headerTranslate = scrollY.interpolate({
     inputRange: [0, HEADER_HEIGHT],
@@ -129,52 +128,32 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
     extrapolate: 'clamp',
   });
 
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_HEIGHT / 2],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
   return (
     <View style={styles.container}>
-      <Animated.View style={[
-          styles.headerImageContainer,
-          { transform: [{ translateY: headerTranslate }, { scale: imageScale }] }
-      ]}>
-        {vendor?.businessImages?.length > 1 ? (
-          <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
-            {vendor.businessImages.map((img: string, index: number) => (
-              <Image key={index} source={{ uri: img }} style={styles.headerImage} />
-            ))}
-          </ScrollView>
-        ) : (
-          <Image source={{ uri: image }} style={styles.headerImage} />
-        )}
-        <View style={styles.imageOverlay} />
+      <Animated.View style={[styles.headerImageContainer, { transform: [{ translateY: headerTranslate }, { scale: imageScale }] }]}>
+        <Image source={{ uri: image }} style={styles.headerImage} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.1)' }]} />
       </Animated.View>
 
-      <Animated.View style={[styles.toolbar, { top: insets.top + 10, opacity: headerOpacity }]}>
-        <TouchableOpacity style={styles.backPill} onPress={onBack}>
+      <View style={[styles.toolbar, { top: insets.top + 10 }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.row}>
-            <TouchableOpacity style={styles.actionPill} onPress={() => Share.share({ message: `Check out ${vendor?.businessName} on Subhdin!` })}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => Share.share({ message: `Check out ${vendor?.businessName} on Subhdin!` })}>
                 <Ionicons name="share-social-outline" size={22} color={colors.text} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionPill} onPress={onCompare}>
+            <TouchableOpacity style={styles.actionBtn} onPress={onCompare}>
                 <Ionicons name="git-compare-outline" size={22} color={colors.text} />
             </TouchableOpacity>
         </View>
-      </Animated.View>
+      </View>
 
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
-        contentContainerStyle={{ paddingTop: HEADER_HEIGHT - 80 }}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+        contentContainerStyle={{ paddingTop: HEADER_HEIGHT - 60 }}
       >
         <View style={styles.mainContent}>
           <View style={styles.dragIndicator} />
@@ -182,73 +161,54 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
           <View style={styles.vendorHeader}>
             <View style={styles.rowBetween}>
                 <View style={{ flex: 1 }}>
-                    <View style={styles.row}>
-                        <Text style={styles.businessName}>{vendor?.businessName}</Text>
-                        {vendor?.status === 'APPROVED' && (
-                            <View style={styles.verifiedBadge}>
-                                <Ionicons name="checkmark-seal" size={20} color={colors.success} />
-                            </View>
-                        )}
-                    </View>
+                    <Text style={styles.businessName}>{vendor?.businessName}</Text>
                     <View style={styles.locationRow}>
                         <Ionicons name="location" size={14} color={colors.primary} />
                         <Text style={styles.locationText}>{vendor?.area}, {vendor?.city}</Text>
                     </View>
                 </View>
                 <View style={styles.scoreCard}>
-                    <Text style={styles.scoreVal}>{vendor?.averageRating ? vendor.averageRating.toFixed(1) : "0"}</Text>
-                    <View style={styles.row}>
-                        <Ionicons name="star" size={10} color={colors.white} />
-                        <Text style={styles.revCount}>({vendor?.reviewCount || reviews.length})</Text>
-                    </View>
+                    <Text style={styles.scoreVal}>{(Number(vendor?.averageRating || 0)).toFixed(1)}</Text>
+                    <Ionicons name="star" size={12} color={colors.white} />
                 </View>
             </View>
 
             {!isRevealed ? (
                 <TouchableOpacity style={styles.revealBox} onPress={handleReveal} activeOpacity={0.9}>
-                    <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
                     <View style={styles.revealInner}>
                         <View style={styles.lockIconBox}>
-                            <Ionicons name="lock-closed" size={30} color={colors.white} />
+                            <Ionicons name="lock-closed" size={24} color={colors.primary} />
                         </View>
-                        <Text style={styles.revealTitle}>Reveal Contact Details</Text>
-                        <Text style={styles.revealDesc}>Tap to connect with {vendor?.ownerName || 'Expert'}</Text>
+                        <View style={{ marginLeft: 15 }}>
+                            <Text style={styles.revealTitle}>Unlock Contact Details</Text>
+                            <Text style={styles.revealDesc}>Connect directly with the expert</Text>
+                        </View>
                     </View>
                 </TouchableOpacity>
             ) : (
                 <Animated.View style={[styles.revealedCard, { transform: [{ scale: revealScale }] }]}>
                     <View style={styles.contactPoint}>
-                        <View style={styles.pointIcon}><Ionicons name="person" size={20} color={colors.primary} /></View>
-                        <View>
-                            <Text style={styles.pointLabel}>Owner</Text>
-                            <Text style={styles.pointValue}>{vendor?.ownerName}</Text>
-                        </View>
+                        <Text style={styles.pointLabel}>OWNER</Text>
+                        <Text style={styles.pointValue}>{vendor?.ownerName}</Text>
                     </View>
                     <View style={styles.contactPoint}>
-                        <View style={styles.pointIcon}><Ionicons name="call" size={20} color={colors.primary} /></View>
-                        <View>
-                            <Text style={styles.pointLabel}>Mobile</Text>
-                            <Text style={styles.pointValue}>{vendor?.mobileNumber || vendor?.phone}</Text>
-                        </View>
+                        <Text style={styles.pointLabel}>MOBILE</Text>
+                        <Text style={styles.pointValue}>{vendor?.mobileNumber || vendor?.phone}</Text>
                     </View>
                 </Animated.View>
             )}
           </View>
 
-          <View style={styles.divider} />
-
-          {/* Rating Breakdown Section */}
           <View style={styles.section}>
             <Text style={styles.sectionHeading}>Ratings Analysis</Text>
             <View style={styles.breakdownRow}>
               <View style={styles.averageBox}>
-                <Text style={styles.bigRating}>{vendor?.averageRating ? vendor.averageRating.toFixed(1) : "0"}</Text>
+                <Text style={styles.bigRating}>{(Number(vendor?.averageRating || 0)).toFixed(1)}</Text>
                 <View style={styles.starsRow}>
                   {[1, 2, 3, 4, 5].map(i => (
-                    <Ionicons key={i} name="star" size={16} color={i <= Math.round(vendor?.averageRating || 0) ? colors.primary : colors.border} />
+                    <Ionicons key={i} name="star" size={12} color={i <= Math.round(vendor?.averageRating || 0) ? colors.primary : colors.surfaceDark} />
                   ))}
                 </View>
-                <Text style={styles.totalReviewsText}>{vendor?.reviewCount || reviews.length} Reviews</Text>
               </View>
               <View style={styles.barsContainer}>
                 {[5, 4, 3, 2, 1].map((star) => {
@@ -257,11 +217,9 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
                   const percentage = (count / total) * 100;
                   return (
                     <View key={star} style={styles.barRow}>
-                      <Text style={styles.barStarText}>{star}</Text>
                       <View style={styles.barBg}>
                         <View style={[styles.barFill, { width: `${percentage}%` }]} />
                       </View>
-                      <Text style={styles.barCountText}>{count}</Text>
                     </View>
                   );
                 })}
@@ -269,62 +227,70 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
             </View>
           </View>
 
-          <View style={styles.divider} />
-
           <View style={styles.section}>
              <Text style={styles.sectionHeading}>Services & Packages</Text>
              {services.map((service: any) => (
-                <TouchableOpacity key={service.id} activeOpacity={0.9} onPress={() => setSelectedService(service)}>
-                    <ServiceCard service={service} getSocialIcon={getSocialIcon} />
-                </TouchableOpacity>
+                <ServiceCard
+                    key={service.id}
+                    service={service}
+                    onOpen={() => setSelectedService(service)}
+                    onImagePress={(idx: number) => handleOpenViewer(service.galleryImages, idx)}
+                />
              ))}
           </View>
 
+          {/* Vendor Active Offers Section */}
+          {offers.length > 0 && (
+            <View style={styles.section}>
+                <Text style={styles.sectionHeading}>Active Deals</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16 }}>
+                    {offers.map((offer: any) => (
+                        <View key={offer.id} style={styles.vendorOfferCard}>
+                            <View style={styles.offerBadge}>
+                                <Text style={styles.offerBadgeText}>{offer.discountPercent}% OFF</Text>
+                            </View>
+                            <Text style={styles.vOfferTitle} numberOfLines={1}>{offer.title}</Text>
+                            <Text style={styles.vOfferDesc} numberOfLines={2}>{offer.description}</Text>
+                            <Text style={styles.vOfferExpiry}>Ends: {new Date(offer.endDate).toLocaleDateString()}</Text>
+                        </View>
+                    ))}
+                </ScrollView>
+            </View>
+          )}
+
           <View style={styles.section}>
             <View style={styles.rowBetween}>
-                <Text style={styles.sectionHeading}>Customer Stories</Text>
+                <Text style={styles.sectionHeading}>Reviews</Text>
                 <TouchableOpacity onPress={onAddReview} style={styles.writeReviewBtn}>
-                    <Text style={styles.writeReviewText}>Share Your Story</Text>
+                    <Text style={styles.writeReviewText}>Write Review</Text>
                 </TouchableOpacity>
             </View>
-            {reviews.length === 0 ? (
-                <View style={styles.emptyState}><Text style={styles.emptyStateText}>Be the first to share your magic moment!</Text></View>
-            ) : (
-                reviews.map((rev: any) => (
-                    <View key={rev.id} style={styles.premiumReviewCard}>
-                        <View style={styles.reviewAccent} />
-                        <View style={styles.row}>
-                            <View style={styles.userAvatar}>
-                                <Text style={styles.userAvatarText}>{rev.userName?.[0] || 'A'}</Text>
+            {reviews.map((rev: any) => (
+                <View key={rev.id} style={styles.reviewCard}>
+                    <View style={styles.row}>
+                        <View style={styles.userAvatar}><Text style={styles.userAvatarText}>{rev.userName?.[0] || 'A'}</Text></View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={styles.revNameText}>{rev.userName}</Text>
+                            <View style={styles.starsContainer}>
+                                {[1,2,3,4,5].map(i => <Ionicons key={i} name="star" size={10} color={i <= rev.rating ? colors.primary : colors.surfaceDark} />)}
                             </View>
-                            <View style={{ flex: 1, marginLeft: 15 }}>
-                                <Text style={styles.revNameText}>{rev.userName}</Text>
-                                <View style={styles.starsContainer}>
-                                    {[1,2,3,4,5].map(i => (
-                                        <Ionicons key={i} name="star" size={14} color={i <= rev.rating ? colors.primary : colors.border} />
-                                    ))}
-                                </View>
-                            </View>
-                            <View style={styles.dateLabel}>
-                                <Text style={styles.dateLabelText}>{new Date(rev.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Text>
-                            </View>
-                        </View>
-                        <View style={styles.commentBox}>
-                            <Ionicons name="quote" size={18} color="rgba(184, 134, 11, 0.1)" style={styles.quoteIcon} />
-                            <Text style={styles.revCommentText}>{rev.comment}</Text>
                         </View>
                     </View>
-                ))
-            )}
+                    <Text style={styles.revCommentText}>{rev.comment}</Text>
+                </View>
+            ))}
           </View>
           <View style={{ height: 140 }} />
         </View>
       </Animated.ScrollView>
 
-      <View style={[styles.actionDock, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <TouchableOpacity style={styles.dockCall} onPress={handleCall}><Ionicons name="call" size={24} color={colors.white} /></TouchableOpacity>
+      <View style={[styles.actionDock, { paddingBottom: Math.max(insets.bottom, 15) }]}>
+        <TouchableOpacity style={styles.dockCall} onPress={handleCall}><Ionicons name="call" size={22} color={colors.text} /></TouchableOpacity>
+        <TouchableOpacity style={styles.dockAddCompare} onPress={onCompare}>
+            <Ionicons name="git-compare-outline" size={22} color={colors.primary} />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.dockWhatsapp} onPress={handleWhatsApp}>
-          <Ionicons name="logo-whatsapp" size={26} color={colors.white} /><Text style={styles.dockWhatsappText}>Enquire Now</Text>
+          <Ionicons name="logo-whatsapp" size={24} color={colors.white} /><Text style={styles.dockWhatsappText}>Enquire Now</Text>
         </TouchableOpacity>
       </View>
 
@@ -341,10 +307,33 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
                   </View>
 
                   {selectedService && (
-                      <ScrollView showsVerticalScrollIndicator={false}>
+                      <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
                           <View style={styles.modalHero}>
                             {selectedService.galleryImages?.length > 0 ? (
-                                <Image source={{ uri: selectedService.galleryImages[0] }} style={styles.modalHeroImage} />
+                                <View style={{ position: 'relative' }}>
+                                    <FlatList
+                                        data={selectedService.galleryImages}
+                                        horizontal
+                                        pagingEnabled
+                                        nestedScrollEnabled
+                                        showsHorizontalScrollIndicator={false}
+                                        onMomentumScrollEnd={(e) => {
+                                            const index = Math.round(e.nativeEvent.contentOffset.x / (width - 40));
+                                            setActiveModalImg(index);
+                                        }}
+                                        renderItem={({ item, index }) => (
+                                            <TouchableOpacity activeOpacity={0.9} onPress={() => handleOpenViewer(selectedService.galleryImages, index)}>
+                                                <Image source={{ uri: item }} style={styles.modalHeroImage} />
+                                            </TouchableOpacity>
+                                        )}
+                                        keyExtractor={(_, i) => i.toString()}
+                                    />
+                                    <View style={styles.modalPagination}>
+                                        {selectedService.galleryImages.map((_: any, i: number) => (
+                                            <View key={i} style={[styles.modalDot, activeModalImg === i && styles.modalDotActive]} />
+                                        ))}
+                                    </View>
+                                </View>
                             ) : (
                                 <View style={styles.noImagePlaceholder}>
                                     <Ionicons name="images-outline" size={50} color={colors.border} />
@@ -373,20 +362,6 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
                                       <Text style={styles.modalStatValue}>{selectedService.category}</Text>
                                   </View>
                               </View>
-
-                              {selectedService.highlights?.length > 0 && (
-                                  <>
-                                    <Text style={styles.modalLabel}>Highlights</Text>
-                                    <View style={styles.modalHighlights}>
-                                        {selectedService.highlights.map((h: string, i: number) => (
-                                            <View key={i} style={styles.modalTag}>
-                                                <Ionicons name="checkmark-circle" size={14} color={colors.success} />
-                                                <Text style={styles.modalTagText}>{h}</Text>
-                                            </View>
-                                        ))}
-                                    </View>
-                                  </>
-                              )}
                           </View>
                           <View style={{ height: 40 }} />
                       </ScrollView>
@@ -394,182 +369,176 @@ export function VendorDetailScreen({ token, vendorId, onBack, onCompare, onAddRe
               </View>
           </View>
       </Modal>
+
+      {/* Full Screen Image Viewer */}
+      <Modal visible={isViewerVisible} transparent animationType="fade">
+          <View style={styles.viewerContainer}>
+              <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+
+              <View style={[styles.viewerHeader, { top: insets.top + 10 }]}>
+                  <Text style={styles.viewerIndexText}>{viewerIndex + 1} / {viewerImages.length}</Text>
+                  <TouchableOpacity onPress={() => setIsViewerVisible(false)} style={styles.viewerCloseBtn}>
+                      <Ionicons name="close" size={30} color={colors.white} />
+                  </TouchableOpacity>
+              </View>
+
+              <FlatList
+                  data={viewerImages}
+                  horizontal
+                  pagingEnabled
+                  initialScrollIndex={viewerIndex}
+                  getItemLayout={(_, index) => ({
+                      length: width,
+                      offset: width * index,
+                      index,
+                  })}
+                  onMomentumScrollEnd={(e) => {
+                      const index = Math.round(e.nativeEvent.contentOffset.x / width);
+                      setViewerIndex(index);
+                  }}
+                  showsHorizontalScrollIndicator={false}
+                  renderItem={({ item }) => (
+                      <View style={styles.viewerImageWrapper}>
+                          <Image source={{ uri: item }} style={styles.viewerFullImage} />
+                      </View>
+                  )}
+                  keyExtractor={(_, i) => i.toString()}
+              />
+          </View>
+      </Modal>
     </View>
   );
 }
 
-function ServiceCard({ service, getSocialIcon }: any) {
+function ServiceCard({ service, onOpen, onImagePress }: any) {
     const [activeIndex, setActiveIndex] = useState(0);
     const hasImages = service.galleryImages?.length > 0;
-    const cardWidth = width - 48; // content padding is 24 on each side
+    const cardWidth = width - 40;
 
     return (
         <View style={styles.offeringCard}>
-            {hasImages ? (
+            {hasImages && (
                 <View style={styles.offeringGalleryWrapper}>
                     <FlatList
-                        data={service.galleryImages}
-                        horizontal
-                        pagingEnabled
+                        data={service.galleryImages} horizontal pagingEnabled nestedScrollEnabled
                         showsHorizontalScrollIndicator={false}
-                        onMomentumScrollEnd={(e) => {
-                            const index = Math.round(e.nativeEvent.contentOffset.x / cardWidth);
-                            setActiveIndex(index);
-                        }}
+                        onMomentumScrollEnd={(e) => setActiveIndex(Math.round(e.nativeEvent.contentOffset.x / cardWidth))}
                         keyExtractor={(_, i) => i.toString()}
-                        renderItem={({ item }) => (
-                            <Image source={{ uri: item }} style={[styles.offeringImage, { width: cardWidth }]} />
+                        renderItem={({ item, index }) => (
+                            <TouchableOpacity activeOpacity={0.95} onPress={() => onImagePress?.(index)}>
+                                <Image source={{ uri: item }} style={[styles.offeringImage, { width: cardWidth }]} />
+                            </TouchableOpacity>
                         )}
                     />
                     <View style={styles.pagination}>
                         {service.galleryImages.map((_: any, i: number) => (
-                            <View key={i} style={[styles.dot, activeIndex === i && styles.activeDot]} />
+                            <View key={i} style={[styles.dot, activeIndex === i && styles.pDotActive]} />
                         ))}
                     </View>
                 </View>
-            ) : (
-                <View style={styles.noServiceImageBox}>
-                    <Ionicons name="images-outline" size={32} color={colors.border} />
-                </View>
             )}
-            <View style={styles.offeringBody}>
+            <TouchableOpacity style={styles.offeringBody} onPress={onOpen} activeOpacity={0.9}>
                 <View style={styles.rowBetween}>
                     <Text style={styles.offeringName}>{service.serviceName}</Text>
                     <Text style={styles.offeringPrice}>₹{service.price}</Text>
                 </View>
-                <Text style={styles.offeringDesc}>{service.description}</Text>
-                <View style={styles.offeringTags}>
-                    {service.capacity > 0 && (
-                        <View style={styles.badgeTag}>
-                            <Ionicons name="people" size={14} color={colors.textMuted} />
-                            <Text style={styles.badgeText}>{service.capacity} Guests</Text>
-                        </View>
-                    )}
-                    {service.videoUrls?.map((url: string, idx: number) => (
-                        <TouchableOpacity key={idx} style={styles.videoLink} onPress={() => Linking.openURL(url)}>
-                            <Ionicons name={getSocialIcon(url) as any} size={16} color={colors.primary} />
-                            <Text style={styles.videoLinkText}>Portfolio</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            </View>
+                <Text style={styles.offeringDesc} numberOfLines={2}>{service.description}</Text>
+            </TouchableOpacity>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.white },
   headerImageContainer: { position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_HEIGHT, backgroundColor: colors.surfaceDark },
   headerImage: { width: width, height: HEADER_HEIGHT, resizeMode: 'cover' },
-  imageOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.2)' },
-  toolbar: { position: 'absolute', left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 },
-  backPill: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' },
-  actionPill: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', marginLeft: 12 },
+  toolbar: { position: 'absolute', left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 100 },
+  backBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', elevation: 3 },
+  actionBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', marginLeft: 12, elevation: 3 },
   row: { flexDirection: 'row', alignItems: 'center' },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  mainContent: { flex: 1, backgroundColor: colors.white, borderTopLeftRadius: 50, borderTopRightRadius: 50, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: -15 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 20, marginTop: -20 },
-  dragIndicator: { width: 50, height: 6, backgroundColor: colors.border, borderRadius: 3, alignSelf: 'center', marginBottom: 25, opacity: 0.5 },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  mainContent: { flex: 1, backgroundColor: colors.white, borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: 20, marginTop: -20, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+  dragIndicator: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
   vendorHeader: { marginBottom: 20 },
-  businessName: { fontSize: 28, fontWeight: '900', color: colors.text, letterSpacing: -0.5 },
-  verifiedBadge: { marginLeft: 6, marginTop: 4 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 6 },
-  locationText: { fontSize: 15, color: colors.textMuted, fontWeight: '600' },
-  scoreCard: { backgroundColor: colors.primary, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 18, alignItems: 'center' },
-  scoreVal: { color: colors.white, fontSize: 20, fontWeight: '900' },
-  revCount: { color: colors.white, fontSize: 11, fontWeight: '700', marginLeft: 4, opacity: 0.9 },
-  revealBox: { height: 160, borderRadius: 35, overflow: 'hidden', marginTop: 30, justifyContent: 'center', alignItems: 'center', position: 'relative', backgroundColor: colors.secondary },
-  revealInner: { alignItems: 'center', zIndex: 10 },
-  lockIconBox: { width: 75, height: 75, borderRadius: 25, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 15 },
-  revealTitle: { fontSize: 20, fontWeight: '900', color: colors.white, letterSpacing: 0.5 },
-  revealDesc: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '600', marginTop: 6 },
-  revealedCard: { padding: 25, borderRadius: 35, backgroundColor: colors.primaryLight, marginTop: 30, gap: 20, borderWidth: 1.5, borderColor: colors.primary },
-  contactPoint: { flexDirection: 'row', alignItems: 'center', gap: 18 },
-  pointIcon: { width: 52, height: 52, borderRadius: 18, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
-  pointLabel: { fontSize: 12, color: colors.textMuted, fontWeight: '700', textTransform: 'uppercase' },
-  pointValue: { fontSize: 17, color: colors.text, fontWeight: '900' },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: 15, opacity: 0.5 },
-  breakdownRow: { flexDirection: 'row', alignItems: 'center', gap: 24, backgroundColor: colors.background, padding: 20, borderRadius: 32 },
-  averageBox: { alignItems: 'center', gap: 4 },
-  bigRating: { fontSize: 44, fontWeight: '900', color: colors.text },
-  starsRow: { flexDirection: 'row', marginTop: 4 },
-  totalReviewsText: { fontSize: 12, color: colors.textMuted, fontWeight: '600', marginTop: 4 },
-  barsContainer: { flex: 1, gap: 6 },
-  barRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  barStarText: { fontSize: 12, fontWeight: '700', color: colors.text, width: 10 },
-  barBg: { flex: 1, height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' },
-  barFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 3 },
-  barCountText: { fontSize: 12, fontWeight: '600', color: colors.textMuted, width: 20, textAlign: 'right' },
-  section: { marginTop: 35 },
-  sectionHeading: { fontSize: 22, fontWeight: '900', color: colors.text, marginBottom: 20 },
-  offeringCard: { backgroundColor: colors.white, borderRadius: 32, marginBottom: 24, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
-  noServiceImageBox: { height: 120, backgroundColor: colors.surfaceDark, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: colors.border },
-  offeringGalleryWrapper: { position: 'relative' },
-  offeringImage: { width: width - 48, height: 240, resizeMode: 'cover' },
-  pagination: { position: 'absolute', bottom: 15, alignSelf: 'center', flexDirection: 'row', gap: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.5)' },
-  activeDot: { width: 20, backgroundColor: colors.white },
-  offeringBody: { padding: 20 },
-  offeringName: { fontSize: 18, fontWeight: '800', color: colors.text },
-  offeringPrice: { fontSize: 18, fontWeight: '900', color: colors.primary },
-  offeringDesc: { fontSize: 14, color: colors.textMuted, marginTop: 10, lineHeight: 22 },
-  offeringTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18 },
-  badgeTag: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surfaceDark, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14 },
-  badgeText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  videoLink: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primaryLight, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14 },
-  videoLinkText: { fontSize: 12, fontWeight: '800', color: colors.primary },
-  writeReviewBtn: { backgroundColor: colors.primaryLight, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 15 },
-  writeReviewText: { color: colors.primary, fontWeight: '900', fontSize: 13 },
-  emptyState: { padding: 50, alignItems: 'center' },
-  emptyStateText: { fontSize: 15, color: colors.textMuted, fontWeight: '600' },
-  premiumReviewCard: {
-    padding: 24,
-    backgroundColor: colors.white,
-    borderRadius: 35,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
-    position: 'relative',
-    overflow: 'hidden'
-  },
-  reviewAccent: { position: 'absolute', top: 0, left: 0, bottom: 0, width: 6, backgroundColor: colors.primary, opacity: 0.8 },
-  userAvatar: { width: 54, height: 54, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  userAvatarText: { color: colors.white, fontSize: 24, fontWeight: '900' },
-  revNameText: { fontSize: 17, fontWeight: '800', color: colors.text },
-  starsContainer: { flexDirection: 'row', marginTop: 4 },
-  dateLabel: { backgroundColor: colors.surfaceDark, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
-  dateLabelText: { fontSize: 11, color: colors.textMuted, fontWeight: '700' },
-  commentBox: { marginTop: 18, position: 'relative' },
-  quoteIcon: { position: 'absolute', top: -5, left: -10 },
-  revCommentText: { fontSize: 15, color: colors.text, lineHeight: 24, fontWeight: '500', opacity: 0.8 },
-  actionDock: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.white, padding: 20, flexDirection: 'row', gap: 15, borderTopWidth: 1, borderTopColor: colors.border },
-  dockCall: { width: 70, height: 70, backgroundColor: colors.secondary, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  dockWhatsapp: { flex: 1, height: 70, backgroundColor: '#25D366', borderRadius: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  businessName: { fontSize: 24, fontWeight: '900', color: colors.text },
+  locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
+  locationText: { fontSize: 14, color: colors.textMuted, fontWeight: '600' },
+  scoreCard: { backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  scoreVal: { color: colors.white, fontSize: 16, fontWeight: '900' },
+  revealBox: { height: 80, borderRadius: 20, overflow: 'hidden', marginTop: 20, backgroundColor: colors.primaryLight, borderWidth: 1, borderColor: colors.primary },
+  revealInner: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, height: '100%' },
+  revealTitle: { fontSize: 15, fontWeight: '800', color: colors.text },
+  revealDesc: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  revealedCard: { padding: 20, borderRadius: 20, backgroundColor: colors.surface, marginTop: 20, flexDirection: 'row', justifyContent: 'space-around', borderWidth: 1, borderColor: colors.primary },
+  contactPoint: { alignItems: 'center' },
+  pointLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '800' },
+  pointValue: { fontSize: 15, color: colors.text, fontWeight: '800', marginTop: 2 },
+  section: { marginTop: 30 },
+  sectionHeading: { fontSize: 18, fontWeight: '900', color: colors.text, marginBottom: 15 },
+  breakdownRow: { flexDirection: 'row', alignItems: 'center', gap: 20, backgroundColor: colors.surface, padding: 15, borderRadius: 24, borderWidth: 1, borderColor: colors.border },
+  averageBox: { alignItems: 'center' },
+  bigRating: { fontSize: 32, fontWeight: '900', color: colors.text },
+  starsRow: { flexDirection: 'row' },
+  barsContainer: { flex: 1, gap: 4 },
+  barRow: { flexDirection: 'row', alignItems: 'center' },
+  barBg: { flex: 1, height: 4, backgroundColor: colors.surfaceDark, borderRadius: 2, overflow: 'hidden' },
+  barFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 2 },
+  offeringCard: { backgroundColor: colors.surface, borderRadius: 24, marginBottom: 20, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  offeringImage: { height: 200, resizeMode: 'cover' },
+  pagination: { position: 'absolute', bottom: 10, alignSelf: 'center', flexDirection: 'row', gap: 4 },
+  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.5)' },
+  pDotActive: { width: 12, backgroundColor: colors.white },
+  offeringBody: { padding: 15 },
+  offeringName: { fontSize: 16, fontWeight: '800', color: colors.text },
+  offeringPrice: { fontSize: 16, fontWeight: '900', color: colors.primary },
+  offeringDesc: { fontSize: 13, color: colors.textMuted, marginTop: 5 },
+  writeReviewBtn: { backgroundColor: colors.primaryLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  writeReviewText: { color: colors.primary, fontWeight: '900', fontSize: 12 },
+  reviewCard: { padding: 20, backgroundColor: colors.surface, borderRadius: 20, marginBottom: 15, borderWidth: 1, borderColor: colors.border },
+  userAvatar: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  userAvatarText: { color: colors.white, fontSize: 18, fontWeight: '900' },
+  revNameText: { fontSize: 14, fontWeight: '800', color: colors.text },
+  starsContainer: { flexDirection: 'row', marginTop: 2 },
+  revCommentText: { fontSize: 13, color: colors.text, marginTop: 10, lineHeight: 18 },
+  actionDock: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.white, padding: 15, flexDirection: 'row', gap: 10, borderTopWidth: 1, borderTopColor: colors.border },
+  dockCall: { width: 56, height: 56, backgroundColor: colors.surfaceDark, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  dockAddCompare: { width: 56, height: 56, backgroundColor: colors.primaryLight, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  dockWhatsapp: { flex: 1, height: 56, backgroundColor: colors.primary, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   dockWhatsappText: { color: colors.white, fontSize: 18, fontWeight: '900' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  serviceModal: { backgroundColor: colors.white, borderTopLeftRadius: 40, borderTopRightRadius: 40, height: '90%', padding: 24 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 22, fontWeight: '900', color: colors.text },
-  closeBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceDark, alignItems: 'center', justifyContent: 'center' },
-  modalHero: { height: 250, borderRadius: 30, overflow: 'hidden', marginBottom: 24 },
-  modalHeroImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  serviceModal: { backgroundColor: colors.white, borderTopLeftRadius: 35, borderTopRightRadius: 35, height: '85%', padding: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  modalTitle: { fontSize: 20, fontWeight: '900', color: colors.text },
+  closeBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceDark, alignItems: 'center', justifyContent: 'center' },
+  modalHero: { height: 250, borderRadius: 25, overflow: 'hidden', marginBottom: 20 },
+  modalHeroImage: { width: width - 40, height: 250, resizeMode: 'cover' },
   noImagePlaceholder: { flex: 1, backgroundColor: colors.surfaceDark, alignItems: 'center', justifyContent: 'center' },
-  modalInfo: { gap: 16 },
-  modalServiceName: { fontSize: 24, fontWeight: '900', color: colors.text },
-  modalPriceBadge: { backgroundColor: colors.primaryLight, paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, alignSelf: 'flex-start' },
-  modalPriceText: { color: colors.primary, fontSize: 18, fontWeight: '900' },
-  modalLabel: { fontSize: 13, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginTop: 10 },
-  modalDesc: { fontSize: 16, color: colors.text, lineHeight: 24, opacity: 0.8 },
-  modalStatsRow: { flexDirection: 'row', gap: 20, marginTop: 10 },
-  modalStatItem: { flex: 1, backgroundColor: colors.background, padding: 15, borderRadius: 20, alignItems: 'center', gap: 6 },
-  modalStatLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '700' },
-  modalStatValue: { fontSize: 15, fontWeight: '800', color: colors.text },
-  modalHighlights: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 5 },
-  modalTag: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surfaceDark, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
-  modalTagText: { fontSize: 13, fontWeight: '700', color: colors.text },
+  modalInfo: { gap: 12 },
+  modalServiceName: { fontSize: 20, fontWeight: '900', color: colors.text },
+  modalPriceBadge: { backgroundColor: colors.primaryLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, alignSelf: 'flex-start' },
+  modalPriceText: { color: colors.primary, fontSize: 16, fontWeight: '900' },
+  modalLabel: { fontSize: 11, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginTop: 5 },
+  modalDesc: { fontSize: 14, color: colors.text, lineHeight: 22, opacity: 0.8 },
+  modalStatsRow: { flexDirection: 'row', gap: 15, marginTop: 5 },
+  modalStatItem: { flex: 1, backgroundColor: colors.background, padding: 12, borderRadius: 16, alignItems: 'center', gap: 4 },
+  modalStatLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '700' },
+  modalStatValue: { fontSize: 14, fontWeight: '800', color: colors.text },
+  modalPagination: { position: 'absolute', bottom: 15, alignSelf: 'center', flexDirection: 'row', gap: 6 },
+  modalDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
+  modalDotActive: { width: 15, backgroundColor: colors.white },
+  viewerContainer: { flex: 1, backgroundColor: 'black' },
+  viewerHeader: { position: 'absolute', left: 0, right: 0, zIndex: 100, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 },
+  viewerIndexText: { color: colors.white, fontSize: 16, fontWeight: '800' },
+  viewerCloseBtn: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
+  viewerImageWrapper: { width: width, height: '100%', justifyContent: 'center', alignItems: 'center' },
+  viewerFullImage: { width: width, height: '80%', resizeMode: 'contain' },
+  vendorOfferCard: { backgroundColor: colors.primaryLight, padding: 20, borderRadius: 24, width: width * 0.7, borderWidth: 1, borderColor: colors.primary, gap: 8 },
+  offerBadge: { backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, alignSelf: 'flex-start' },
+  offerBadgeText: { color: colors.white, fontSize: 12, fontWeight: '900' },
+  vOfferTitle: { fontSize: 16, fontWeight: '900', color: colors.text },
+  vOfferDesc: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },
+  vOfferExpiry: { fontSize: 10, color: colors.primary, fontWeight: '700', marginTop: 4 },
+  emptyState: { padding: 30, alignItems: 'center' },
+  emptyStateText: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
 });

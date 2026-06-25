@@ -116,6 +116,12 @@ export const vendorApi = {
   getVendorServices: (token: string, vendorId: string) =>
     apiRequest<any[]>(`/vendors/${vendorId}/services`, { token }),
 
+  getPublicOffers: (token?: string) =>
+    apiRequest<any[]>("/vendors/offers", { token }),
+
+  getVendorOffers: (token: string, vendorId: string) =>
+    apiRequest<any[]>(`/vendors/${vendorId}/offers`, { token }),
+
   submitReview: (token: string, vendorId: string, data: { rating: number; comment: string; userName: string }) =>
     apiRequest("/vendor/reviews", {
       method: "POST",

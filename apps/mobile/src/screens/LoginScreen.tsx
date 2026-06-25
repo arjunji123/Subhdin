@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Image, KeyboardAvoidingView, Platform, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, Image, KeyboardAvoidingView, Platform, TouchableOpacity, Dimensions } from "react-native";
 import { colors } from "../theme/colors";
 import { Button } from "../components/Button";
 import { InputField } from "../components/InputField";
-
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const { height } = Dimensions.get("window");
 
 type Props = {
   phone: string;
@@ -27,26 +28,23 @@ export function LoginScreen({ phone, setPhone, onSendOtp, onGoToSignup, loading 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+      style={styles.container}
     >
-      <View style={styles.inner}>
-        <View style={styles.logoContainer}>
-          <Image
-            source={require("../../assets/logo.png")}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+      <View style={[styles.inner, { paddingTop: insets.top }]}>
+        <View style={styles.logoBox}>
+          <Image source={require("../../assets/logo.png")} style={styles.logo} resizeMode="contain" />
+          <View style={styles.logoShadow} />
         </View>
 
         <View style={styles.header}>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Enter your mobile number to login</Text>
+          <Text style={styles.title}>Welcome to{'\n'}Subhdin</Text>
+          <Text style={styles.subtitle}>The elite marketplace for your celebrations</Text>
         </View>
 
         <View style={styles.form}>
           <InputField
             label="Mobile Number"
-            placeholder="e.g. 9876543210"
+            placeholder="9876543210"
             keyboardType="phone-pad"
             maxLength={10}
             value={phone}
@@ -57,7 +55,7 @@ export function LoginScreen({ phone, setPhone, onSendOtp, onGoToSignup, loading 
           />
 
           <Button
-            title="Login"
+            title="Get Started"
             onPress={onSendOtp}
             loading={loading}
             disabled={!!getError()}
@@ -65,9 +63,9 @@ export function LoginScreen({ phone, setPhone, onSendOtp, onGoToSignup, loading 
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
+          <Text style={styles.footerText}>New to Subhdin? </Text>
           <TouchableOpacity onPress={onGoToSignup}>
-            <Text style={styles.signupLink}>Sign Up</Text>
+            <Text style={styles.signupLink}>Create Account</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -76,52 +74,16 @@ export function LoginScreen({ phone, setPhone, onSendOtp, onGoToSignup, loading 
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
-  inner: {
-    flex: 1,
-    padding: 24,
-    justifyContent: "center",
-  },
-  logoContainer: {
-    alignItems: "center",
-    marginBottom: 20,
-    marginTop: -40,
-  },
-  logo: {
-    width: 200,
-    height: 200,
-  },
-  header: {
-    marginBottom: 32,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "900",
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.textMuted,
-    marginTop: 6,
-  },
-  form: {
-    gap: 24,
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 40,
-  },
-  footerText: {
-    color: colors.textMuted,
-    fontSize: 15,
-  },
-  signupLink: {
-    color: colors.primary,
-    fontWeight: "700",
-    fontSize: 15,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  inner: { flex: 1, padding: 30, justifyContent: "center" },
+  logoBox: { alignItems: "center", marginBottom: 40 },
+  logo: { width: 140, height: 140, zIndex: 1 },
+  logoShadow: { position: 'absolute', bottom: 10, width: 80, height: 20, backgroundColor: 'rgba(212, 175, 55, 0.2)', borderRadius: 40, filter: 'blur(10px)' as any },
+  header: { marginBottom: 40 },
+  title: { fontSize: 40, fontWeight: "900", color: colors.text, letterSpacing: -1.5, lineHeight: 45 },
+  subtitle: { fontSize: 16, color: colors.textMuted, marginTop: 10, fontWeight: "600", lineHeight: 24 },
+  form: { gap: 25 },
+  footer: { flexDirection: "row", justifyContent: "center", marginTop: 40 },
+  footerText: { color: colors.textMuted, fontSize: 15, fontWeight: '600' },
+  signupLink: { color: colors.primary, fontWeight: "800", fontSize: 15 },
 });

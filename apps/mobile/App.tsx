@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   Alert,
   Animated,
+  Dimensions,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from '@expo/vector-icons';
@@ -36,12 +37,15 @@ import { OfferFormScreen } from "./src/screens/OfferFormScreen";
 import { HelpSupportScreen } from "./src/screens/HelpSupportScreen";
 import { UserHomeScreen } from "./src/screens/UserHomeScreen";
 import { VendorDiscoveryScreen } from "./src/screens/VendorDiscoveryScreen";
+import { OfferDiscoveryScreen } from "./src/screens/OfferDiscoveryScreen";
 import { VendorDetailScreen } from "./src/screens/VendorDetailScreen";
 import { VendorCompareScreen } from "./src/screens/VendorCompareScreen";
 import { AddReviewScreen } from "./src/screens/AddReviewScreen";
 import { colors } from "./src/theme/colors";
 
-type Tab = "dashboard" | "services" | "offers" | "profile" | "user_home" | "user_search" | "user_vendors";
+const { width } = Dimensions.get("window");
+
+type Tab = "dashboard" | "services" | "offers" | "profile" | "user_home" | "user_vendors";
 type ViewState =
   | "login" | "signup" | "otp_verify" | "main" | "service_form"
   | "reviews" | "edit_profile" | "grow_business" | "offer_form" | "help_support"
@@ -114,16 +118,12 @@ function AppContent() {
     if (!token) return;
     setLoading(true);
     try {
-      // Get role directly from storage to be 100% sure we have the latest
       const savedRole = await AsyncStorage.getItem(ROLE_KEY);
       const currentRole = savedRole || userRole || 'user';
-
-      console.log("🔄 Loading initial data for role:", currentRole);
 
       if (currentRole === 'vendor') {
         const prof = await vendorApi.getProfile(token);
         setProfile(prof);
-        // Load vendor specific data
         const [dash, srvs, offs] = await Promise.all([
             vendorApi.getDashboard(token),
             vendorApi.getServices(token),
@@ -133,24 +133,25 @@ function AppContent() {
         setServices(srvs);
         setOffers(offs);
       } else {
-        // FOR USERS
+        let userProf = null;
         try {
-            const prof = await vendorApi.getUserProfile(token);
-            setProfile(prof);
-            await AsyncStorage.setItem("@subhdin_user_data", JSON.stringify(prof));
+            userProf = await vendorApi.getUserProfile(token);
+            setProfile(userProf);
+            await AsyncStorage.setItem("@subhdin_user_data", JSON.stringify(userProf));
         } catch (e) {
             const savedProfile = await AsyncStorage.getItem("@subhdin_user_data");
-            if (savedProfile) setProfile(JSON.parse(savedProfile));
+            if (savedProfile) {
+                userProf = JSON.parse(savedProfile);
+                setProfile(userProf);
+            }
         }
-        await loadFeaturedVendors();
+        await loadHomeData(userProf?.city);
       }
 
-      // Finalize view state
       setUserRole(currentRole as any);
       setView("main");
       setTab(currentRole === "vendor" ? "dashboard" : "user_home");
     } catch (err: any) {
-      console.error("Initial load failed:", err);
       if (err.message?.includes("401") || err.status === 401) {
         await handleLogout();
       }
@@ -159,34 +160,20 @@ function AppContent() {
     }
   }
 
-  async function loadFeaturedVendors() {
+  async function loadHomeData(city?: string) {
     try {
-      console.log("Loading vendors for home screen...");
-      const data = await vendorApi.getVendors(token, { limit: 10 });
-      setHomeData({ featuredVendors: data, banners: [] });
-    } catch (err) {
-      console.error("Home vendors load failed:", err);
-    }
-  }
+      const [featured, popular, nearby] = await Promise.all([
+          vendorApi.getVendors(token, { limit: 8 }),
+          vendorApi.getVendors(token, { limit: 8, sortBy: 'rating' }),
+          city ? vendorApi.getVendors(token, { limit: 8, location: city }) : Promise.resolve([])
+      ]);
 
-  async function loadDashboard() {
-    try {
-      const data = await vendorApi.getDashboard(token);
-      setDashboard(data);
-    } catch (err) {}
-  }
-
-  async function loadServices() {
-    try {
-      const data = await vendorApi.getServices(token);
-      setServices(data);
-    } catch (err) {}
-  }
-
-  async function loadOffers() {
-    try {
-      const data = await vendorApi.getOffers(token);
-      setOffers(data);
+      setHomeData({
+          featuredVendors: featured,
+          popularVendors: popular,
+          nearbyVendors: nearby,
+          banners: []
+      });
     } catch (err) {}
   }
 
@@ -198,13 +185,12 @@ function AppContent() {
     setAuthType(type);
     setAuthError(null);
     try {
-      // Always use requestOtp unified endpoint
       await authApi.requestOtp(targetPhone);
       setPhone(targetPhone);
       setView("otp_verify");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (err: any) {
-      Alert.alert("Oops!", "Something went wrong. Please try again.");
+      Alert.alert("Oops!", "Something went wrong.");
     } finally {
       setLoading(false);
     }
@@ -218,12 +204,10 @@ function AppContent() {
     setLoading(true);
     setAuthError(null);
     try {
-      const role = authType === "signup" ? signupData.role : userRole;
+      const role = authType === "signup" ? signupData.role : undefined;
       const data = await authApi.verifyOtp(phone, otp, role, authType === "signup" ? signupData : {});
 
-      // Use the actual role from the backend response
       const verifiedRole = data.user.role;
-
       await AsyncStorage.setItem(TOKEN_KEY, data.token);
       await AsyncStorage.setItem(ROLE_KEY, verifiedRole);
       await AsyncStorage.setItem("@subhdin_user_data", JSON.stringify(data.user));
@@ -232,14 +216,11 @@ function AppContent() {
       setProfile(data.user);
       setToken(data.token);
       setSignupData(null);
-
-      // Navigate to the correct flow immediately
       setView("main");
       setTab(verifiedRole === "vendor" ? "dashboard" : "user_home");
-
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err: any) {
-      setAuthError("Incorrect code. Please check and try again.");
+      setAuthError("Incorrect code. Try again.");
     } finally {
       setLoading(false);
     }
@@ -263,13 +244,17 @@ function AppContent() {
   async function handleUpdateProfile(data: any) {
     setLoading(true);
     try {
-      await vendorApi.updateProfile(token, data);
+      if (userRole === 'vendor') {
+        await vendorApi.updateProfile(token, data);
+      } else {
+        await vendorApi.updateUserProfile(token, data);
+      }
       await loadInitialData();
       setView("main");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Success", "Profile updated");
+      Alert.alert("Success", "Profile updated!");
     } catch (err) {
-      Alert.alert("Error", "Update failed. Please check your connection.");
+      Alert.alert("Error", "Update failed.");
     } finally {
       setLoading(false);
     }
@@ -288,71 +273,14 @@ function AppContent() {
       } else {
         await vendorApi.createService(token, finalData);
       }
-      await loadServices();
+      await loadInitialData();
       setView("main");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Success", "Service listing saved!");
     } catch (err: any) {
-      Alert.alert("Error", "Failed to save service. Check all required fields.");
+      Alert.alert("Error", "Save failed.");
     } finally {
       setLoading(false);
     }
-  }
-
-  async function handleDeleteService(id: string) {
-    try {
-      await vendorApi.deleteService(token, id);
-      await loadServices();
-      Alert.alert("Success", "Listing removed.");
-    } catch (err) {
-      Alert.alert("Error", "Could not delete. Please try again.");
-    }
-  }
-
-  async function handleSaveOffer(data: any) {
-    setLoading(true);
-    try {
-      if (editingOffer) {
-        await vendorApi.updateOffer(token, editingOffer.id, data);
-      } else {
-        await vendorApi.createOffer(token, data);
-      }
-      await loadOffers();
-      setView("main");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Success", "Offer published!");
-    } catch (err) {
-      Alert.alert("Error", "Failed to save offer.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleDeleteOffer(id: string) {
-    try {
-      await vendorApi.deleteOffer(token, id);
-      await loadOffers();
-      Alert.alert("Success", "Offer removed.");
-    } catch (err) {
-      Alert.alert("Error", "Delete failed.");
-    }
-  }
-
-  async function handleToggleOffer(offer: any) {
-    try {
-        await vendorApi.updateOffer(token, offer.id, { isActive: !offer.isActive });
-        await loadOffers();
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch (err) {}
-  }
-
-  if (loading && !isLoggedIn && view === "login") {
-    return (
-      <View style={styles.centered}>
-        <Image source={require("./assets/logo.png")} style={{ width: 150, height: 150, marginBottom: 20 }} resizeMode="contain" />
-        <ActivityIndicator size="small" color={colors.primary} />
-      </View>
-    );
   }
 
   async function handleTrackEvent(vendorId: string, type: 'VIEW' | 'CONTACT_REVEAL' | 'WHATSAPP_CLICK' | 'LEAD') {
@@ -368,10 +296,7 @@ function AppContent() {
       await vendorApi.submitReview(token, selectedVendor.id, { rating, comment, userName });
       setView("celebration");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // Auto close celebration after 3s
-      setTimeout(() => {
-        setView("user_vendor_detail");
-      }, 3500);
+      setTimeout(() => setView("user_vendor_detail"), 3500);
     } catch (error) {
       Alert.alert("Error", "Failed to submit review");
     } finally {
@@ -379,177 +304,87 @@ function AppContent() {
     }
   }
 
+  const handleAddToCompare = (vendor: any) => {
+    if (compareList.find(v => v.id === vendor.id)) {
+        setView("user_compare");
+        return;
+    }
+    const newList = [...compareList, vendor];
+    setCompareList(newList);
+    if (newList.length >= 2) {
+        setView("user_compare");
+    } else {
+        Alert.alert("Added to Compare", "Select one more expert to see side-by-side comparison.");
+    }
+  };
+
+  const handleRemoveFromCompare = (vendorId: string) => {
+    setCompareList(prev => prev.filter(v => v.id !== vendorId));
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
 
       <View style={styles.flex}>
-        {view === "login" && (
-          <View style={styles.centerContent}>
-            <LoginScreen phone={phone} setPhone={setPhone} onSendOtp={() => requestOtp(phone, "login")} onGoToSignup={() => setView("signup")} loading={loading} />
-          </View>
-        )}
-
-        {view === "signup" && (
-          <RegisterProfileScreen onComplete={(data, role) => {
-            setSignupData({...data, role});
-            requestOtp(data.mobileNumber, "signup");
-          }} onBack={() => setView("login")} loading={loading} />
-        )}
-
-        {view === "otp_verify" && (
-          <OtpVerifyScreen phone={phone} otp={otp} setOtp={(v) => { setOtp(v); setAuthError(null); }} onVerify={verifyOtp} onResend={() => requestOtp(phone, authType)} onBack={() => setView("login")} loading={loading} error={authError} />
-        )}
-
-        {view === "reviews" && <ReviewsScreen reviews={[]} onBack={() => setView("main")} />}
-        {view === "grow_business" && <GrowBusinessScreen onBack={() => setView("main")} onContactSupport={() => setView("help_support")} />}
-        {view === "help_support" && <HelpSupportScreen onBack={() => setView(isLoggedIn ? "main" : "login")} />}
+        {view === "login" && <LoginScreen phone={phone} setPhone={setPhone} onSendOtp={() => requestOtp(phone, "login")} onGoToSignup={() => setView("signup")} loading={loading} />}
+        {view === "signup" && <RegisterProfileScreen onComplete={(data, role) => { setSignupData({...data, role}); requestOtp(data.mobileNumber, "signup"); }} onBack={() => setView("login")} loading={loading} />}
+        {view === "otp_verify" && <OtpVerifyScreen phone={phone} otp={otp} setOtp={(v) => { setOtp(v); setAuthError(null); }} onVerify={verifyOtp} onResend={() => requestOtp(phone, authType)} onBack={() => setView("login")} loading={loading} error={authError} />}
         {view === "edit_profile" && <EditProfileScreen profile={profile} onSave={handleUpdateProfile} onBack={() => setView("main")} loading={loading} />}
         {view === "service_form" && <ServicesScreen initialData={editingService} onSave={handleSaveService} onCancel={() => setView("main")} loading={loading} isReadOnly={isReadOnly} />}
-        {view === "offer_form" && <OfferFormScreen initialData={editingOffer} onSave={handleSaveOffer} onCancel={() => setView("main")} loading={loading} />}
-
-        {/* User Discovery Views */}
-        {view === "user_discovery" && (
-            <VendorDiscoveryScreen
-                token={token}
-                category={selectedCategory}
-                initialQuery={searchQuery}
-                onBack={() => setView("main")}
-                onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }}
-            />
-        )}
-        {view === "user_vendor_detail" && (
-            <VendorDetailScreen
-                token={token}
-                vendorId={selectedVendor?.id}
-                onBack={() => setView(selectedCategory || searchQuery ? "user_discovery" : "main")}
-                onCompare={() => {
-                    setCompareList([selectedVendor, ...compareList.filter(x => x.id !== selectedVendor.id)].slice(0,3));
-                    setView("user_compare");
-                }}
-                onAddReview={() => setView("user_add_review")}
-                onTrackAction={(type) => handleTrackEvent(selectedVendor.id, type)}
-            />
-        )}
-        {view === "user_compare" && (
-            <VendorCompareScreen
-                vendors={compareList}
-                onBack={() => setView("user_vendor_detail")}
-            />
-        )}
-        {view === "user_add_review" && (
-            <AddReviewScreen
-                vendorName={selectedVendor?.businessName}
-                userName={profile?.fullName || profile?.name || "Customer"}
-                onBack={() => setView("user_vendor_detail")}
-                onSubmit={(r, c) => handleReviewSubmit(r, c, profile?.fullName || profile?.name || "Customer")}
-                loading={loading}
-            />
-        )}
+        {view === "offer_form" && <OfferFormScreen initialData={editingOffer} onSave={(d) => {}} onCancel={() => setView("main")} loading={loading} />}
+        {view === "user_discovery" && <VendorDiscoveryScreen token={token} category={selectedCategory} initialQuery={searchQuery} onBack={() => setView("main")} onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }} />}
+        {view === "user_vendor_detail" && <VendorDetailScreen token={token} vendorId={selectedVendor?.id} onBack={() => setView(selectedCategory || searchQuery ? "user_discovery" : "main")} onCompare={() => handleAddToCompare(selectedVendor)} compareCount={compareList.length} onAddReview={() => setView("user_add_review")} onTrackAction={(type) => handleTrackEvent(selectedVendor.id, type)} />}
+        {view === "user_compare" && <VendorCompareScreen vendors={compareList} onBack={() => setView("user_vendor_detail")} onRemove={handleRemoveFromCompare} />}
+        {view === "user_add_review" && <AddReviewScreen vendorName={selectedVendor?.businessName} userName={profile?.fullName || profile?.name || "Customer"} onBack={() => setView("user_vendor_detail")} onSubmit={(r, c) => handleReviewSubmit(r, c, profile?.fullName || profile?.name || "Customer")} loading={loading} />}
 
         {view === "celebration" && (
             <View style={styles.celebrationContainer}>
-                <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+                <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} />
                 <Animated.View style={styles.celebrationContent}>
-                    <View style={styles.iconCircle}>
-                        <Ionicons name="star" size={50} color={colors.primary} />
+                    <View style={styles.celebrationIconBox}>
+                        <Ionicons name="sparkles" size={60} color={colors.primary} />
                     </View>
                     <Text style={styles.celebrationTitle}>Magical Review!</Text>
-                    <Text style={styles.celebrationSub}>Your story has been added to our community. Thank you for making Subhdin better.</Text>
-                    <View style={styles.goldLine} />
+                    <Text style={styles.celebrationSub}>Your story has been added. Thank you for helping our community grow.</Text>
+                    <View style={styles.celebrationBar} />
                 </Animated.View>
             </View>
         )}
 
         {view === "main" && (
           <View style={styles.flex}>
-            {userRole === "vendor" ? (
-              <>
-                {tab === "dashboard" && (
-                  <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-                    <Image source={require("./assets/logo.png")} style={styles.headerLogo} resizeMode="contain" />
-                    <View style={styles.headerInfo}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.welcomeText}>Welcome back,</Text>
-                        <Text style={styles.ownerName} numberOfLines={1}>{profile?.ownerName || "Partner"}</Text>
-                        <View style={styles.ratingRow}>
-                          <Ionicons name="star" size={14} color="#B8860B" />
-                          <Text style={styles.headerRatingText}>{dashboard?.avgRating ? dashboard.avgRating.toFixed(1) : "5.0"}</Text>
-                        </View>
-                      </View>
-                      <TouchableOpacity style={styles.growBtn} onPress={() => setView("grow_business")}>
-                        <Ionicons name="rocket-sharp" size={24} color={colors.primary} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+            <View style={styles.mainContent}>
+                {userRole === "vendor" ? (
+                    <>
+                        {tab === "dashboard" && <DashboardScreen data={dashboard} loading={loading} onRefresh={loadInitialData} onViewReviews={() => setView("reviews")} />}
+                        {tab === "services" && <ServiceListScreen services={services} onAdd={() => { setEditingService(null); setIsReadOnly(false); setView("service_form"); }} onEdit={(s) => { setEditingService(s); setIsReadOnly(false); setView("service_form"); }} onView={(s) => { setEditingService(s); setIsReadOnly(true); setView("service_form"); }} onDelete={() => {}} loading={loading} />}
+                        {tab === "profile" && <ProfileScreen profile={profile} userRole={userRole} onUpdate={() => setView("edit_profile")} onLogout={handleLogout} onHelp={() => {}} onDeleteAccount={handleLogout} loading={loading} />}
+                    </>
+                ) : (
+                    <>
+                        {tab === "user_home" && <UserHomeScreen userName={profile?.fullName || profile?.name} homeData={homeData} loading={loading} onCategoryPress={(cat) => { setSelectedCategory(cat); setSearchQuery(""); setView("user_discovery"); }} onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }} onSearchPress={(q) => { setSelectedCategory(""); setSearchQuery(q || ""); setView("user_discovery"); }} />}
+                        {tab === "user_vendors" && <VendorDiscoveryScreen token={token} hideSearch={true} onBack={() => setTab("user_home")} onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }} />}
+                        {tab === "offers" && <OfferDiscoveryScreen token={token} onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }} />}
+                        {tab === "profile" && <ProfileScreen profile={profile} userRole={userRole} onUpdate={() => setView("edit_profile")} onLogout={handleLogout} onHelp={() => {}} onDeleteAccount={handleLogout} loading={loading} />}
+                    </>
                 )}
+            </View>
 
-                <View style={[styles.mainContent, tab !== "dashboard" && { paddingTop: insets.top + 10 }]}>
-                  {tab === "dashboard" && <DashboardScreen data={dashboard} loading={loading} onRefresh={loadDashboard} onViewReviews={() => setView("reviews")} />}
-                  {tab === "services" && <ServiceListScreen services={services} onAdd={() => { setEditingService(null); setIsReadOnly(false); setView("service_form"); }} onEdit={(s) => { setEditingService(s); setIsReadOnly(false); setView("service_form"); }} onView={(s) => { setEditingService(s); setIsReadOnly(true); setView("service_form"); }} onDelete={handleDeleteService} loading={loading} />}
-                  {tab === "offers" && <OfferListScreen offers={offers} onAdd={() => { setEditingOffer(null); setView("offer_form"); }} onEdit={(o) => { setEditingOffer(o); setView("offer_form"); }} onDelete={handleDeleteOffer} onToggleActive={handleToggleOffer} loading={loading} />}
-                  {tab === "profile" && <ProfileScreen profile={profile} onUpdate={() => setView("edit_profile")} onLogout={handleLogout} onHelp={() => setView("help_support")} onDeleteAccount={handleLogout} loading={loading} />}
-                </View>
-              </>
-            ) : (
-              <View style={styles.mainContent}>
-                 {tab === "user_home" && (
-                    <UserHomeScreen
-                        userName={profile?.fullName || profile?.name}
-                        homeData={homeData}
-                        onCategoryPress={(cat) => {
-                            setSelectedCategory(cat);
-                            setSearchQuery("");
-                            setView("user_discovery");
-                        }}
-                        onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }}
-                        onSearchPress={(q) => {
-                            setSelectedCategory("");
-                            setSearchQuery(q || "");
-                            setView("user_discovery");
-                        }}
-                    />
-                 )}
-                 {tab === "user_vendors" && (
-                     <VendorDiscoveryScreen
-                        token={token}
-                        onBack={() => setTab("user_home")}
-                        onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }}
-                    />
-                 )}
-                 {tab === "offers" && (
-                     <VendorDiscoveryScreen
-                        token={token}
-                        category="Offers"
-                        onBack={() => setTab("user_home")}
-                        onVendorPress={(v) => { setSelectedVendor(v); setView("user_vendor_detail"); }}
-                    />
-                 )}
-                 {tab === "profile" && <ProfileScreen profile={profile} onUpdate={() => setView("edit_profile")} onLogout={handleLogout} onHelp={() => setView("help_support")} onDeleteAccount={handleLogout} loading={loading} />}
-              </View>
-            )}
-
-            {/* Glassy Bottom Navigation Bar */}
-            <View style={[styles.navContainer, { paddingBottom: insets.bottom }]}>
-               {Platform.OS === 'ios' ? (
-                 <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="light" />
-               ) : (
-                 <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 255, 0.95)' }]} />
-               )}
+            <View style={styles.navContainer}>
               <View style={styles.bottomNav}>
                 {userRole === "vendor" ? (
                   <>
-                    <NavButton active={tab === "dashboard"} icon="grid" label="Home" onPress={() => setTab("dashboard")} />
+                    <NavButton active={tab === "dashboard"} icon="stats-chart" label="Stats" onPress={() => setTab("dashboard")} />
                     <NavButton active={tab === "services"} icon="briefcase" label="Services" onPress={() => setTab("services")} />
-                    <NavButton active={tab === "offers"} icon="flame" label="Offers" onPress={() => setTab("offers")} />
-                    <NavButton active={tab === "profile"} icon="person" label="Account" onPress={() => setTab("profile")} />
+                    <NavButton active={tab === "profile"} icon="person" label="Profile" onPress={() => setTab("profile")} />
                   </>
                 ) : (
                   <>
                     <NavButton active={tab === "user_home"} icon="home" label="Explore" onPress={() => setTab("user_home")} />
-                    <NavButton active={tab === "user_vendors"} icon="people" label="Vendors" onPress={() => setTab("user_vendors")} />
-                    <NavButton active={tab === "offers"} icon="flame" label="Offers" onPress={() => setTab("offers")} />
-                    <NavButton active={tab === "profile"} icon="person" label="Profile" onPress={() => setTab("profile")} />
+                    <NavButton active={tab === "user_vendors"} icon="people" label="Experts" onPress={() => setTab("user_vendors")} />
+                    <NavButton active={tab === "offers"} icon="flame" label="Deals" onPress={() => setTab("offers")} />
+                    <NavButton active={tab === "profile"} icon="person" label="Account" onPress={() => setTab("profile")} />
                   </>
                 )}
               </View>
@@ -579,55 +414,56 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.white },
+  container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.white },
-  centerContent: { flex: 1, padding: 24, justifyContent: "center" },
-  mainContent: { flex: 1, paddingBottom: 80 }, // Account for absolute bottom nav
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 24, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.white },
-  headerLogo: { width: 72, height: 72, marginLeft: -10 },
-  headerInfo: { flex: 1, flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginLeft: 8 },
-  welcomeText: { fontSize: 12, color: colors.textMuted, fontWeight: "600", textTransform: 'uppercase' },
-  ownerName: { fontSize: 18, fontWeight: "900", color: colors.text, letterSpacing: -0.5 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  headerRatingText: { fontSize: 13, fontWeight: "800", color: "#B8860B" },
-  growBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center" },
+  mainContent: { flex: 1 },
   navContainer: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
-    overflow: 'hidden',
+    bottom: 30,
+    left: 24,
+    right: 24,
+    borderRadius: 35,
+    backgroundColor: colors.surface,
+    elevation: 20,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: colors.border
   },
-  bottomNav: {
-    flexDirection: "row",
-    height: 65,
-    paddingTop: 10,
-  },
+  bottomNav: { flexDirection: "row", height: 75, alignItems: 'center' },
   navBtn: { flex: 1, alignItems: "center", justifyContent: "center" },
   navLabel: { fontSize: 10, color: colors.textMuted, marginTop: 5, fontWeight: "600" },
   navLabelActive: { color: colors.primary, fontWeight: "800" },
-  textMuted: { color: colors.textMuted, fontSize: 16, fontWeight: "600" },
-  celebrationContainer: { ...StyleSheet.absoluteFillObject, zIndex: 999, alignItems: 'center', justifyContent: 'center' },
+  celebrationContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 999,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   celebrationContent: {
     alignItems: 'center',
     gap: 20,
-    backgroundColor: 'rgba(15, 15, 15, 0.98)',
+    backgroundColor: colors.surface,
     padding: 40,
     borderRadius: 45,
     width: 350,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: colors.primary,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 15 },
-    shadowOpacity: 0.4,
-    shadowRadius: 25,
-    elevation: 15
+    shadowOpacity: 0.1,
+    shadowRadius: 30,
+    elevation: 20
   },
-  iconCircle: { width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(184, 134, 11, 0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.primary },
-  celebrationTitle: { fontSize: 30, fontWeight: '900', color: colors.primary, textAlign: 'center', letterSpacing: -0.5 },
-  celebrationSub: { fontSize: 15, color: 'rgba(255,255,255,0.7)', textAlign: 'center', lineHeight: 24, fontWeight: '600', paddingHorizontal: 10 },
-  goldLine: { width: 80, height: 3, backgroundColor: colors.primary, borderRadius: 2, marginTop: 5, opacity: 0.6 },
+  celebrationIconBox: { width: 110, height: 110, borderRadius: 55, backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.primary },
+  celebrationTitle: { fontSize: 28, fontWeight: '900', color: colors.text, textAlign: 'center' },
+  celebrationSub: { fontSize: 15, color: colors.textMuted, textAlign: 'center', lineHeight: 24, fontWeight: '600' },
+  celebrationBar: { width: 80, height: 4, backgroundColor: colors.primary, borderRadius: 2, marginTop: 10 },
 });

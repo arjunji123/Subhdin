@@ -1,5 +1,5 @@
-import React from "react";
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from "react-native";
+import React, { useRef } from "react";
+import { Pressable, Text, StyleSheet, ActivityIndicator, Platform, Animated } from "react-native";
 import { colors } from "../theme/colors";
 
 type Props = {
@@ -8,42 +8,65 @@ type Props = {
   variant?: "primary" | "secondary" | "outline";
   loading?: boolean;
   disabled?: boolean;
+  style?: any;
 };
 
-export function Button({ title, onPress, variant = "primary", loading, disabled }: Props) {
-  const containerStyle = [
-    styles.button,
-    styles[variant],
-    (disabled || loading) && styles.disabled,
-  ];
+export function Button({ title, onPress, variant = "primary", loading, disabled, style }: Props) {
+  const isOutline = variant === "outline";
+  const scale = useRef(new Animated.Value(1)).current;
 
-  const textStyle = [
-    styles.text,
-    variant === "outline" ? styles.textOutline : styles.textFull,
-  ];
+  const onPressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.96,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const onPressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      friction: 4,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  };
 
   return (
-    <TouchableOpacity
-      style={containerStyle}
-      onPress={onPress}
-      disabled={disabled || loading}
-    >
-      {loading ? (
-        <ActivityIndicator color={variant === "outline" ? colors.primary : colors.white} />
-      ) : (
-        <Text style={textStyle}>{title}</Text>
-      )}
-    </TouchableOpacity>
+    <Animated.View style={[{ transform: [{ scale }] }, style]}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.button,
+          styles[variant],
+          (disabled || loading) && styles.disabled,
+        ]}
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        disabled={disabled || loading}
+        android_ripple={{ color: isOutline ? colors.primaryLight : 'rgba(255,255,255,0.2)' }}
+      >
+        {loading ? (
+          <ActivityIndicator color={isOutline ? colors.primary : colors.white} />
+        ) : (
+          <Text style={[styles.text, isOutline ? styles.textOutline : styles.textFull]}>{title}</Text>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    paddingVertical: 16,
-    borderRadius: 16,
+    height: 58,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   primary: {
     backgroundColor: colors.primary,
@@ -53,12 +76,15 @@ const styles = StyleSheet.create({
   },
   outline: {
     backgroundColor: "transparent",
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: colors.primary,
+    elevation: 0,
+    shadowOpacity: 0,
   },
   text: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 17,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
   textFull: {
     color: colors.white,
